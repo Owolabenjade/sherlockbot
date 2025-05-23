@@ -4,9 +4,9 @@ This guide explains how to set up and configure Twilio WhatsApp integration for 
 
 ## Prerequisites
 
-- Twilio Account SID: `AC33348c48abeccb764aa89188107369c7`
-- Twilio Auth Token: `a2a6536ee5ca2e1ca6bc506014ce1457`
-- Twilio Phone Number: `+18383682677`
+- Twilio Account SID
+- Twilio Auth Token
+- Twilio Phone Number
 
 ## Step 1: Set Up WhatsApp Sandbox
 
