@@ -2,7 +2,7 @@
 import os
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-from firebase_admin import credentials, initialize_app
+from firebase_init import initialize_firebase
 from middlewares.error_middleware import register_error_handlers
 from middlewares.auth_middleware import auth_middleware
 from routes.webhook_routes import webhook_bp
@@ -25,20 +25,10 @@ app = Flask(__name__,
 # Load configuration
 app.config.from_object('config.Config')
 
-# Initialize Firebase Admin SDK
-if os.getenv('FLASK_ENV') == 'production':
-    # Use application default credentials in production
-    initialize_app()
-else:
-    # Use service account in development
-    cred_path = os.getenv('FIREBASE_SERVICE_ACCOUNT')
-    if cred_path:
-        cred = credentials.Certificate(cred_path)
-        initialize_app(cred, {
-            'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET')
-        })
-    else:
-        logger.warning("FIREBASE_SERVICE_ACCOUNT not set, Firebase features will not work")
+# Initialize Firebase
+firebase_initialized = initialize_firebase()
+if not firebase_initialized:
+    logger.error("Firebase initialization failed, application may not function correctly")
 
 # Register middlewares
 app.before_request(auth_middleware)
@@ -57,7 +47,10 @@ def index():
 # Health check endpoint
 @app.route('/health')
 def health_check():
-    return jsonify({'status': 'ok'})
+    return jsonify({
+        'status': 'ok',
+        'firebase': 'connected' if firebase_initialized else 'disconnected'
+    })
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 8080))

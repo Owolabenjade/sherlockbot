@@ -10,8 +10,8 @@ from config import Config
 logger = get_logger()
 
 # Initialize Twilio client
-twilio_client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN) if Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN else None
-twilio_validator = RequestValidator(Config.TWILIO_AUTH_TOKEN) if Config.TWILIO_AUTH_TOKEN else None
+twilio_client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+twilio_validator = RequestValidator(Config.TWILIO_AUTH_TOKEN)
 
 def send_whatsapp_message(to, body):
     """
@@ -25,16 +25,13 @@ def send_whatsapp_message(to, body):
         dict: Message SID and status
     """
     try:
-        if not twilio_client:
-            logger.error("Twilio client not initialized")
-            return {
-                'success': False,
-                'error': "Twilio client not initialized"
-            }
-        
         # Ensure phone number is in the right format
         recipient = to if to.startswith('whatsapp:') else f"whatsapp:{to}"
-        sender = f"whatsapp:{Config.TWILIO_PHONE_NUMBER}" if not Config.TWILIO_PHONE_NUMBER.startswith('whatsapp:') else Config.TWILIO_PHONE_NUMBER
+        sender = Config.TWILIO_PHONE_NUMBER
+        
+        # Ensure sender has whatsapp: prefix
+        if not sender.startswith('whatsapp:'):
+            sender = f"whatsapp:{sender}"
         
         # Send message
         message = twilio_client.messages.create(
@@ -78,16 +75,13 @@ def send_whatsapp_message_with_media(to, body, media_url):
         dict: Message SID and status
     """
     try:
-        if not twilio_client:
-            logger.error("Twilio client not initialized")
-            return {
-                'success': False,
-                'error': "Twilio client not initialized"
-            }
-        
         # Ensure phone number is in the right format
         recipient = to if to.startswith('whatsapp:') else f"whatsapp:{to}"
-        sender = f"whatsapp:{Config.TWILIO_PHONE_NUMBER}" if not Config.TWILIO_PHONE_NUMBER.startswith('whatsapp:') else Config.TWILIO_PHONE_NUMBER
+        sender = Config.TWILIO_PHONE_NUMBER
+        
+        # Ensure sender has whatsapp: prefix
+        if not sender.startswith('whatsapp:'):
+            sender = f"whatsapp:{sender}"
         
         # Send message with media
         message = twilio_client.messages.create(
@@ -132,10 +126,6 @@ def validate_twilio_request(request):
     # Skip validation in development mode
     if os.getenv('FLASK_ENV') == 'development' and os.getenv('SKIP_TWILIO_VALIDATION'):
         return True
-    
-    if not twilio_validator:
-        logger.error("Twilio validator not initialized")
-        return False
     
     try:
         # Get the signature from the request headers

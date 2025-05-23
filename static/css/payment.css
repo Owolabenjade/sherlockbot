@@ -1,0 +1,266 @@
+/* static/css/payment.css - Payment page styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.container {
+    max-width: 500px;
+    width: 90%;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    overflow: hidden;
+}
+
+.header {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+    padding: 2rem;
+    text-align: center;
+}
+
+.header.error {
+    background: linear-gradient(135deg, #f44336, #d32f2f);
+}
+
+.icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+}
+
+.header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.header p {
+    opacity: 0.9;
+    font-size: 1rem;
+}
+
+.content {
+    padding: 2rem;
+}
+
+.message {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #666;
+    line-height: 1.6;
+}
+
+.details {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+}
+
+.detail-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.detail-label {
+    font-weight: 600;
+    color: #333;
+}
+
+.detail-value {
+    color: #666;
+}
+
+.actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+    transform: translateY(-2px);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+/* Feedback Form */
+.feedback-form {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #eee;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+textarea.form-control {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.radio-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.radio-item input[type="radio"] {
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .container {
+        margin: 1rem;
+        width: calc(100% - 2rem);
+    }
+    
+    .header {
+        padding: 1.5rem;
+    }
+    
+    .content {
+        padding: 1.5rem;
+    }
+    
+    .actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+    }
+    
+    .detail-item {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
+
+/* Loading state */
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Success/Error states */
+.success-message {
+    color: #27ae60;
+    background: #d4edda;
+    padding: 1rem;
+    border-radius: 6px;
+    border: 1px solid #c3e6cb;
+    margin-bottom: 1rem;
+}
+
+.error-message {
+    color: #e74c3c;
+    background: #f8d7da;
+    padding: 1rem;
+    border-radius: 6px;
+    border: 1px solid #f5c6cb;
+    margin-bottom: 1rem;
+}

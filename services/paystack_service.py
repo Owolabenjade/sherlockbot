@@ -1,8 +1,9 @@
-# services/paystack_service.py - Payment service
+# services/paystack_service.py - Enhanced Paystack integration
 import os
 import hmac
 import hashlib
 import requests
+import uuid
 from datetime import datetime
 from utils.logger import get_logger
 from config import Config
@@ -30,6 +31,9 @@ def create_payment_session(amount, currency, description, customer_email, metada
         # Format amount (Paystack expects amount in kobo/cents)
         amount_in_kobo = int(amount * 100)
         
+        # Generate a unique reference for this transaction
+        reference = f"cv-review-{uuid.uuid4().hex[:10]}"
+        
         # Prepare request data
         data = {
             'amount': amount_in_kobo,
@@ -37,10 +41,11 @@ def create_payment_session(amount, currency, description, customer_email, metada
             'email': customer_email,
             'metadata': metadata,
             'callback_url': success_url,
+            'reference': reference,
             'description': description
         }
         
-        # Set headers
+        # Set headers with PUBLIC key (safe for frontend)
         headers = {
             'Authorization': f'Bearer {Config.PAYSTACK_SECRET_KEY}',
             'Content-Type': 'application/json'
@@ -61,6 +66,9 @@ def create_payment_session(amount, currency, description, customer_email, metada
                 # Return success with payment data
                 payment_data = result.get('data', {})
                 
+                # Log success but don't log sensitive details
+                logger.info(f"Payment session created for {customer_email} with reference {reference}")
+                
                 return {
                     'success': True,
                     'payment_reference': payment_data.get('reference'),
@@ -69,7 +77,7 @@ def create_payment_session(amount, currency, description, customer_email, metada
                 }
         
         # Return error
-        logger.error(f"Paystack API error: {response.text}")
+        logger.error(f"Paystack API error: {response.status_code} - {response.text}")
         return {
             'success': False,
             'error': response.text
@@ -93,13 +101,13 @@ def verify_payment(reference):
         dict: Payment verification data
     """
     try:
-        # Set headers
+        # Set headers with SECRET key (only for backend)
         headers = {
             'Authorization': f'Bearer {Config.PAYSTACK_SECRET_KEY}',
             'Content-Type': 'application/json'
         }
         
-        # Make API request
+        # Make API request to verification endpoint
         response = requests.get(
             f'https://api.paystack.co/transaction/verify/{reference}',
             headers=headers
@@ -115,6 +123,8 @@ def verify_payment(reference):
                 # Check if payment is successful
                 if data.get('status') == 'success':
                     # Return success with payment data
+                    logger.info(f"Payment verification successful for reference {reference}")
+                    
                     return {
                         'success': True,
                         'reference': data.get('reference'),
@@ -123,9 +133,15 @@ def verify_payment(reference):
                         'payment_date': data.get('paid_at'),
                         'metadata': data.get('metadata', {})
                     }
+                else:
+                    logger.warning(f"Payment verification failed: status is {data.get('status')}")
+                    return {
+                        'success': False,
+                        'error': f"Payment verification failed: status is {data.get('status')}"
+                    }
         
         # Return error
-        logger.error(f"Paystack verification error: {response.text}")
+        logger.error(f"Paystack verification error: {response.status_code} - {response.text}")
         return {
             'success': False,
             'error': response.text
@@ -150,7 +166,7 @@ def validate_webhook_signature(request_body, signature):
         bool: Whether the signature is valid
     """
     try:
-        # Calculate expected signature
+        # Calculate expected signature using SECRET key
         secret = Config.PAYSTACK_SECRET_KEY
         expected_signature = hmac.new(
             secret.encode(),

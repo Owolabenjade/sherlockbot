@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your CV Review is Ready - Sherlock Bot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .header p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .score-section {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .score-value {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .score-label {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        .insights-section {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .insights-section h3 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+        }
+        .insight-item {
+            background-color: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+        .insight-category {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .insight-text {
+            color: #555;
+        }
+        .download-section {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        .download-btn {
+            display: inline-block;
+            background-color: white;
+            color: #e74c3c;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 6px;
+            margin: 15px 0;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #eee;
+        }
+        .footer p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .logo {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        .tips-section {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .tips-section h3 {
+            margin: 0 0 15px 0;
+            color: #856404;
+        }
+        .tip-item {
+            margin: 10px 0;
+            color: #856404;
+        }
+        @media (max-width: 600px) {
+            .content {
+                padding: 20px 15px;
+            }
+            .score-value {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🔍</div>
+            <h1>Your CV Review is Ready!</h1>
+            <p>Sherlock Bot CV Review Service</p>
+        </div>
+        
+        <div class="content">
+            <p>Great news! We've completed your {{ review_type.title() }} CV review. Here's what we found:</p>
+            
+            {% if review_type == 'advanced' and score %}
+            <div class="score-section">
+                <div class="score-label">Your CV Score</div>
+                <div class="score-value">{{ score }}/100</div>
+                <p style="margin: 0; opacity: 0.9;">
+                    {% if score >= 80 %}
+                        Excellent! Your CV is highly competitive.
+                    {% elif score >= 65 %}
+                        Good work! A few improvements will make it even stronger.
+                    {% elif score >= 50 %}
+                        Your CV has potential. Focus on the key areas below.
+                    {% else %}
+                        Significant improvements needed for best results.
+                    {% endif %}
+                </p>
+            </div>
+            {% endif %}
+            
+            <div class="insights-section">
+                <h3>🎯 Key Insights & Recommendations</h3>
+                {% for insight in insights[:5] %}
+                <div class="insight-item">
+                    {% if ':' in insight %}
+                        {% set parts = insight.split(':', 1) %}
+                        <div class="insight-category">{{ parts[0] }}</div>
+                        <div class="insight-text">{{ parts[1].strip() }}</div>
+                    {% else %}
+                        <div class="insight-text">{{ insight }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            
+            {% if review_type == 'advanced' and download_link %}
+            <div class="download-section">
+                <h3 style="margin: 0 0 15px 0;">📄 Download Your Complete Report</h3>
+                <p style="margin: 0 0 15px 0; opacity: 0.9;">
+                    Get your comprehensive PDF report with detailed analysis, section-by-section feedback, and improvement recommendations.
+                </p>
+                <a href="{{ download_link }}" class="download-btn">Download Full Report (PDF)</a>
+                <p style="margin: 15px 0 0 0; font-size: 14px; opacity: 0.8;">
+                    Link expires in 24 hours
+                </p>
+            </div>
+            {% endif %}
+            
+            <div class="tips-section">
+                <h3>💡 Next Steps</h3>
+                <div class="tip-item">✓ Review each recommendation carefully</div>
+                <div class="tip-item">✓ Update your CV based on the feedback</div>
+                <div class="tip-item">✓ Tailor your CV for each job application</div>
+                <div class="tip-item">✓ Consider getting a second opinion from a mentor</div>
+                {% if review_type == 'basic' %}
+                <div class="tip-item">✓ For detailed analysis, try our Advanced Review</div>
+                {% endif %}
+            </div>
+            
+            <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666;">
+                <strong>Need help with implementation?</strong> Contact us on WhatsApp for additional guidance or to submit an updated CV for review.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="https://wa.me/{{ phone_number.replace('whatsapp:', '').replace('+', '') }}" 
+                   style="display: inline-block; background: linear-gradient(135deg, #25d366, #128c7e); color: white; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold;">
+                    Continue on WhatsApp
+                </a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Sherlock Bot CV Review Service</strong></p>
+            <p>AI-powered CV analysis to help you land your dream job</p>
+            <p style="margin-top: 15px; font-size: 12px;">
+                This email was sent because you requested a CV review via WhatsApp.<br>
+                To submit another CV or get support, message us on WhatsApp.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

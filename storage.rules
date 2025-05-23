@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /cv-uploads/{userId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == 'admin';
+      allow write: if true;  // Allow WhatsApp service to write files
+    }
+    
+    match /review-reports/{userId}/{fileName} {
+      allow read: if true;  // Allow public access to reports via signed URLs
+      allow write: if request.auth != null && request.auth.uid == 'admin';
+    }
+    
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == 'admin';
+    }
+  }
+}

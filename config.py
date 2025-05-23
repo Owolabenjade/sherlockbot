@@ -28,8 +28,7 @@ class Config:
     EMAIL_FROM_NAME = os.getenv('EMAIL_FROM_NAME', 'Sherlock Bot CV Review')
     
     # CV Analysis API
-    CV_ANALYSIS_API_URL = os.getenv('CV_ANALYSIS_API_URL')
-    CV_ANALYSIS_API_KEY = os.getenv('CV_ANALYSIS_API_KEY')
+    CV_ANALYSIS_API_URL = os.getenv('CV_ANALYSIS_API_URL', 'https://cv-review-1.onrender.com/api/upload-and-analyze')
     
     # Payment configuration
     ADVANCED_REVIEW_PRICE = int(os.getenv('ADVANCED_REVIEW_PRICE', 5000))

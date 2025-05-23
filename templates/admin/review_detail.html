@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Details - Sherlock Bot Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+    <header class="header">
+        <h1>Sherlock Bot Admin</h1>
+        <a href="{{ url_for('admin.logout') }}" class="logout-btn">Logout</a>
+    </header>
+    
+    <nav class="nav">
+        <ul>
+            <li><a href="{{ url_for('admin.dashboard') }}">Dashboard</a></li>
+            <li><a href="{{ url_for('admin.users') }}">Users</a></li>
+            <li><a href="{{ url_for('admin.reviews') }}">Reviews</a></li>
+            <li><a href="{{ url_for('admin.payments') }}">Payments</a></li>
+        </ul>
+    </nav>
+    
+    <main class="main">
+        <div style="margin-bottom: 2rem;">
+            <a href="{{ url_for('admin.reviews') }}" class="btn btn-secondary">&larr; Back to Reviews</a>
+        </div>
+        
+        <div class="table-container">
+            <div class="table-header">
+                <h3>Review Details</h3>
+            </div>
+            
+            <div style="padding: 2rem;">
+                <div class="cards">
+                    <div class="card">
+                        <h3>Review Type</h3>
+                        <div class="value" style="font-size: 1.2rem;">{{ review.review_type.title() }}</div>
+                    </div>
+                    <div class="card">
+                        <h3>User</h3>
+                        <div class="value" style="font-size: 1.2rem;">{{ review.user_id }}</div>
+                    </div>
+                    {% if review.improvement_score %}
+                    <div class="card">
+                        <h3>Score</h3>
+                        <div class="value">{{ review.improvement_score }}/100</div>
+                    </div>
+                    {% endif %}
+                    <div class="card">
+                        <h3>Date</h3>
+                        <div class="value" style="font-size: 1.2rem;">{{ review.timestamp[:19] if review.timestamp else 'N/A' }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if review.insights %}
+        <div class="table-container">
+            <div class="table-header">
+                <h3>Insights & Recommendations</h3>
+            </div>
+            <div style="padding: 2rem;">
+                {% for insight in review.insights %}
+                <div style="background: #f8f9fa; padding: 1rem; margin: 1rem 0; border-radius: 6px; border-left: 4px solid #3498db;">
+                    {{ insight }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if review.download_link %}
+        <div class="table-container">
+            <div class="table-header">
+                <h3>Download</h3>
+            </div>
+            <div style="padding: 2rem; text-align: center;">
+                <a href="{{ review.download_link }}" class="btn btn-success" target="_blank">Download PDF Report</a>
+            </div>
+        </div>
+        {% endif %}
+    </main>
+    
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>
