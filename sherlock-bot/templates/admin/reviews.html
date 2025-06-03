@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reviews - Sherlock Bot Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+    <header class="header">
+        <h1>Sherlock Bot Admin</h1>
+        <a href="{{ url_for('admin.logout') }}" class="logout-btn">Logout</a>
+    </header>
+    
+    <nav class="nav">
+        <ul>
+            <li><a href="{{ url_for('admin.dashboard') }}">Dashboard</a></li>
+            <li><a href="{{ url_for('admin.users') }}">Users</a></li>
+            <li><a href="{{ url_for('admin.reviews') }}" class="active">Reviews</a></li>
+            <li><a href="{{ url_for('admin.payments') }}">Payments</a></li>
+        </ul>
+    </nav>
+    
+    <main class="main">
+        <div class="table-container">
+            <div class="table-header">
+                <h3>CV Reviews ({{ total }} total)</h3>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <!-- Search Form -->
+                    <form method="GET" style="display: flex; gap: 0.5rem;">
+                        <input type="text" name="search" value="{{ search }}" placeholder="Search reviews..." class="form-control" style="width: 200px;">
+                        <select name="type" class="form-control" style="width: 120px;">
+                            <option value="">All Types</option>
+                            <option value="basic" {{ 'selected' if review_type == 'basic' else '' }}>Basic</option>
+                            <option value="advanced" {{ 'selected' if review_type == 'advanced' else '' }}>Advanced</option>
+                        </select>
+                        <button type="submit" class="btn btn-primary">Filter</button>
+                        {% if search or review_type %}
+                            <a href="{{ url_for('admin.reviews') }}" class="btn btn-secondary">Clear</a>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+            
+            {% if reviews %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>User</th>
+                        <th>Type</th>
+                        <th>Score</th>
+                        <th>Date</th>
+                        <th>CV File</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for review in reviews %}
+                    <tr>
+                        <td>{{ review.id[:8] }}...</td>
+                        <td>
+                            <a href="{{ url_for('admin.user_detail', user_id=review.user_id) }}">
+                                {{ review.user_id }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ 'success' if review.review_type == 'advanced' else 'primary' }}">
+                                {{ review.review_type.title() }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if review.improvement_score %}
+                                {{ review.improvement_score }}/100
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>{{ review.timestamp[:19] if review.timestamp else 'N/A' }}</td>
+                        <td>
+                            {% if review.cv_file_name %}
+                                {{ review.cv_file_name }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('admin.review_detail', review_id=review.id) }}" class="btn btn-sm btn-primary">View</a>
+                            {% if review.download_link %}
+                                <a href="{{ review.download_link }}" class="btn btn-sm btn-success" target="_blank">Download</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <!-- Pagination -->
+            {% if total_pages > 1 %}
+            <div class="pagination">
+                {% if page > 1 %}
+                    <a href="{{ url_for('admin.reviews', page=page-1, search=search, type=review_type) }}">&laquo; Previous</a>
+                {% endif %}
+                
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == page %}
+                        <span class="current">{{ p }}</span>
+                    {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+                        <a href="{{ url_for('admin.reviews', page=p, search=search, type=review_type) }}">{{ p }}</a>
+                    {% elif p == 4 and page > 6 %}
+                        <span>...</span>
+                    {% elif p == total_pages - 3 and page < total_pages - 5 %}
+                        <span>...</span>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page < total_pages %}
+                    <a href="{{ url_for('admin.reviews', page=page+1, search=search, type=review_type) }}">Next &raquo;</a>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% else %}
+            <div style="text-align: center; padding: 2rem;">
+                <p>No reviews found.</p>
+                {% if search or review_type %}
+                    <a href="{{ url_for('admin.reviews') }}" class="btn btn-primary">View All Reviews</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </main>
+    
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>
