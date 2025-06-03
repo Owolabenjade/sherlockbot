@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "your-firebase-project-id"
-  }
+    "default": "mainmasta-c162d"
+  },
+  "targets": {},
+  "etags": {}
 }

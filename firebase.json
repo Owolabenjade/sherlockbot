@@ -1,42 +1,45 @@
 {
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "functions": [
-    {
-      "source": ".",
-      "codebase": "default",
-      "ignore": [
-        "venv",
-        ".git",
-        ".env",
-        ".gitignore",
-        "scripts",
-        "tests",
-        ".pytest_cache",
-        "**/__pycache__/**",
-        "docs",
-        "static"
-      ],
-      "runtime": "python310"
-    }
-  ],
-  "hosting": {
-    "public": "static",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "function": "app_function"
-      }
-    ]
-  }
+	  "firestore": {
+		      "database": "(default)",
+		          "location": "africa-south1",
+			      "rules": "firestore.rules",
+			          "indexes": "firestore.indexes.json"
+				    },
+				      "storage": {
+					          "rules": "storage.rules"
+						    },
+						      "functions": [
+							          {
+									        "source": "sherlock-bot",
+										      "codebase": "sherlock-bot",
+										            "ignore": [
+												            "venv",
+													            ".git",
+														            ".env",
+															            ".gitignore",
+																            "scripts",
+																	            "tests",
+																		            ".pytest_cache",
+																			            "**/__pycache__/**",
+																				            "docs",
+																					            "firebase-debug.log",
+																						            "firebase-debug.*.log"
+																							          ],
+																								        "runtime": "python310"
+																									    }
+																									      ],
+																									        "hosting": {
+																											    "public": "static",
+																											        "ignore": [
+																													      "firebase.json",
+																													            "**/.*",
+																														          "**/node_modules/**"
+																															      ],
+																															          "rewrites": [
+																																	        {
+																																			        "source": "**",
+																																				        "function": "app_function"
+																																					      }
+																																					          ]
+																																						    }
 }
