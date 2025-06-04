@@ -22,10 +22,10 @@ This guide explains how to set up and configure Twilio WhatsApp integration for 
 2. Set the following webhook URLs:
 
    **When a message comes in:**
-   https://mainmasta-c162d.web.app/webhook/twilio
+   https://mainbot-b123a.web.app/webhook/twilio
 
 **Status callback URL:**
-https://mainmasta-c162d.web.app/webhook/twilio/status
+https://mainbot-b123a.web.app/webhook/twilio/status
 
 3. Make sure to set the HTTP Method to `POST` for both webhooks
 
