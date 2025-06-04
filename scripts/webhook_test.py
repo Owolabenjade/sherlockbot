@@ -4,6 +4,8 @@ import argparse
 import json
 from datetime import datetime
 
+load_dotenv()
+
 def test_twilio_webhook(webhook_url, phone_number, message_body=None):
     """
     Test Twilio webhook endpoint with simulated WhatsApp message
@@ -23,11 +25,11 @@ def test_twilio_webhook(webhook_url, phone_number, message_body=None):
     # Create simulated Twilio webhook payload
     payload = {
         'From': phone_number,
-        'To': 'whatsapp:+18383682677',  # Your Twilio number
+        'To': os.getenv('TWILIO_PHONE_NUMBER', 'whatsapp:+15551234567'),
         'Body': message_body,
         'NumMedia': '0',
         'MessageSid': f'SM{datetime.now().strftime("%Y%m%d%H%M%S")}',
-        'AccountSid': 'AC33348c48abeccb764aa89188107369c7'
+        'AccountSid': os.getenv('TWILIO_ACCOUNT_SID', 'AC1234567890abcdef')
     }
     
     print(f"Sending test webhook to {webhook_url}...")

@@ -45,7 +45,7 @@ def create_payment_session(amount, currency, description, customer_email, metada
             'description': description
         }
         
-        # Set headers with PUBLIC key (safe for frontend)
+        # Set headers with SECRET key (for server-side operations)
         headers = {
             'Authorization': f'Bearer {Config.PAYSTACK_SECRET_KEY}',
             'Content-Type': 'application/json'
@@ -166,15 +166,19 @@ def validate_webhook_signature(request_body, signature):
         bool: Whether the signature is valid
     """
     try:
-        # Calculate expected signature using SECRET key
+        # Remove 'sha512=' prefix if present (some webhooks include this)
+        if signature and signature.startswith('sha512='):
+            signature = signature[7:]
+        
+        # Use the Paystack secret key for webhook validation
         secret = Config.PAYSTACK_SECRET_KEY
         expected_signature = hmac.new(
-            secret.encode(),
+            secret.encode('utf-8'),
             request_body,
             hashlib.sha512
         ).hexdigest()
         
-        # Compare signatures
+        # Compare signatures using constant-time comparison
         return hmac.compare_digest(expected_signature, signature)
     
     except Exception as e:

@@ -4,9 +4,9 @@ This guide explains how to set up and configure Twilio WhatsApp integration for 
 
 ## Prerequisites
 
-- Twilio Account SID
-- Twilio Auth Token
-- Twilio Phone Number
+- Twilio Account SID: `BK1234567890abcdef...` (Get from Twilio Console)
+- Twilio Auth Token: `your-auth-token` (Get from Twilio Console)
+- Twilio Phone Number: `+15551234567` (Your assigned WhatsApp number)
 
 ## Step 1: Set Up WhatsApp Sandbox
 
@@ -22,10 +22,10 @@ This guide explains how to set up and configure Twilio WhatsApp integration for 
 2. Set the following webhook URLs:
 
    **When a message comes in:**
-   https://your-firebase-app.web.app/webhook/twilio
+   https://mainmasta-c162d.web.app/webhook/twilio
 
 **Status callback URL:**
-https://your-firebase-app.web.app/webhook/twilio/status
+https://mainmasta-c162d.web.app/webhook/twilio/status
 
 3. Make sure to set the HTTP Method to `POST` for both webhooks
 
