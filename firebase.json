@@ -10,7 +10,7 @@
   },
   "functions": {
     "source": "sherlock-bot",
-    "runtime": "python310",
+    "runtime": "python38",
     "ignore": [
       "venv",
       ".git",
