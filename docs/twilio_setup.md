@@ -18,14 +18,14 @@ This guide explains how to set up and configure Twilio WhatsApp integration for 
 
 ## Step 2: Configure Webhook URLs
 
-1. In the Twilio Console, go to **Messaging** > **Settings** > **WhatsApp Sandbox Settings**
+1. In the Twilio Console, go to **Messaging** → **Settings** → **WhatsApp Sandbox Settings**
 2. Set the following webhook URLs:
 
    **When a message comes in:**
-   https://mainbot-b123a.web.app/webhook/twilio
+   https://cvreview-d1d4b.web.app/webhook/twilio
 
 **Status callback URL:**
-https://mainbot-b123a.web.app/webhook/twilio/status
+https://cvreview-d1d4b.web.app/webhook/twilio/status
 
 3. Make sure to set the HTTP Method to `POST` for both webhooks
 

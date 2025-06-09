@@ -1,4 +1,4 @@
-# main.py - Cloud Function entry point
+# main.py - Firebase Functions entry point
 import functions_framework
 from app import app
 
@@ -24,3 +24,7 @@ def app_function(request):
         # Dispatch the request to Flask
         response = app.full_dispatch_request()
         return response
+
+# For compatibility with older Firebase Functions
+def main(request):
+    return app_function(request)

@@ -2,32 +2,22 @@
   "firestore": {
     "database": "(default)",
     "location": "africa-south1",
-    "rules": "firestore.rules",
+    "rules": "firestore.rules", 
     "indexes": "firestore.indexes.json"
   },
   "storage": {
     "rules": "storage.rules"
   },
-  "functions": [
-    {
-      "source": "sherlock-bot",
-      "codebase": "sherlock-bot",
-      "ignore": [
-        "venv",
-        ".git",
-        ".env",
-        ".gitignore",
-        "scripts",
-        "tests",
-        ".pytest_cache",
-        "**/__pycache__/**",
-        "docs",
-        "firebase-debug.log",
-        "firebase-debug.*.log"
-      ],
-      "runtime": "python310"
-    }
-  ],
+  "functions": {
+    "source": "sherlock-bot",
+    "runtime": "python310",
+    "ignore": [
+      "venv",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log"
+    ]
+  },
   "hosting": {
     "public": "static",
     "ignore": [
