@@ -5,14 +5,13 @@ import os
 # Add sherlock-bot directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'sherlock-bot'))
 
-# Specify the region for Africa South 1
 @https_fn.on_request(
     region="africa-south1",
-    memory=256,  # Optional: specify memory in MB
-    timeout_sec=60,  # Optional: specify timeout in seconds
+    memory=512,  # Increased for CV processing
+    timeout_sec=300,  # 5 minutes for CV analysis
 )
 def app_function(req: https_fn.Request) -> https_fn.Response:
-    """HTTP Cloud Function entry point for Sherlock Bot."""
+    """HTTP Cloud Function entry point for Sherlock Bot in africa-south1."""
     from app import app
     
     # Convert Firebase request to WSGI environ
@@ -47,20 +46,33 @@ def app_function(req: https_fn.Request) -> https_fn.Response:
     def start_response(status, headers):
         response_data.extend([status, headers])
     
-    app_response = app(environ, start_response)
-    response_body = b''.join(app_response)
-    
-    # Extract status code
-    status_code = int(response_data[0].split()[0])
-    
-    # Extract headers if available
-    headers = {}
-    if len(response_data) > 1:
-        for header, value in response_data[1]:
-            headers[header] = value
-    
-    return https_fn.Response(
-        response_body,
-        status=status_code,
-        headers=headers
-    )
+    try:
+        app_response = app(environ, start_response)
+        response_body = b''.join(app_response)
+        
+        # Extract status code
+        status_code = int(response_data[0].split()[0]) if response_data else 200
+        
+        # Extract headers
+        headers = {}
+        if len(response_data) > 1:
+            for header, value in response_data[1]:
+                headers[header] = value
+        
+        return https_fn.Response(
+            response_body,
+            status=status_code,
+            headers=headers
+        )
+    except Exception as e:
+        # Error handling
+        import json
+        error_response = json.dumps({
+            'error': 'Internal server error',
+            'message': str(e)
+        })
+        return https_fn.Response(
+            error_response,
+            status=500,
+            headers={'Content-Type': 'application/json'}
+        )
