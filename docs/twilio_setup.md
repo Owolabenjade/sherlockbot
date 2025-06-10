@@ -22,10 +22,10 @@ This guide explains how to set up and configure Twilio WhatsApp integration for 
 2. Set the following webhook URLs:
 
    **When a message comes in:**
-   https://cvreview-d1d4b.web.app/webhook/twilio
+   https://app-function-h57sv7umya-bq.a.run.app/webhook/twilio
 
 **Status callback URL:**
-https://cvreview-d1d4b.web.app/webhook/twilio/status
+https://app-function-h57sv7umya-bq.a.run.app/webhook/twilio/status
 
 3. Make sure to set the HTTP Method to `POST` for both webhooks
 

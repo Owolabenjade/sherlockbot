@@ -1,23 +1,22 @@
 {
   "firestore": {
-    "database": "(default)",
-    "location": "africa-south1",
-    "rules": "firestore.rules", 
+    "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "functions": {
-    "source": "sherlock-bot",
-    "runtime": "python38",
-    "ignore": [
-      "venv",
-      ".git",
-      "firebase-debug.log",
-      "firebase-debug.*.log"
-    ]
-  },
+  "functions": [
+    {
+      "source": ".",
+      "codebase": "default",
+      "runtime": "python311",
+      "ignore": [
+        "venv",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "__pycache__"
+      ]
+    }
+  ],
   "hosting": {
     "public": "static",
     "ignore": [
@@ -28,8 +27,11 @@
     "rewrites": [
       {
         "source": "**",
-        "function": "app_function"
+        "destination": "/index.html"
       }
     ]
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }
