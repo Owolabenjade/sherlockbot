@@ -1,4 +1,4 @@
-# services/twilio_service.py - Twilio WhatsApp integration (CORRECTED)
+# services/twilio_service.py - Twilio WhatsApp integration
 import os
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
@@ -123,10 +123,11 @@ def get_firebase_webhook_url():
     """
     # Check if we're running in Firebase Functions/Cloud Run
     if os.getenv('K_SERVICE') or os.getenv('FUNCTION_TARGET'):
-        # We're in Firebase Functions (Cloud Run) - construct the correct URL
+        # In Firebase Functions, GOOGLE_CLOUD_PROJECT is automatically set by the runtime
+        # We don't need to set it in .env as it's reserved
         project_id = os.getenv('GOOGLE_CLOUD_PROJECT') or os.getenv('GCP_PROJECT') or 'cvreview-d1d4b'
         
-        # Your function is deployed in africa-south1, not us-central1
+        # Your function is deployed in africa-south1
         region = 'africa-south1'
         function_name = 'app-function'  # This matches your main.py function name
         
@@ -136,7 +137,7 @@ def get_firebase_webhook_url():
         logger.info(f"Constructed Firebase webhook URL: {webhook_url}")
         return webhook_url
     
-    # Fallback to environment variable or development URL
+    # Fallback to environment variable or hardcoded URL for your project
     fallback_url = os.getenv('TWILIO_WEBHOOK_URL', 'https://africa-south1-cvreview-d1d4b.cloudfunctions.net/app-function/webhook/twilio')
     logger.info(f"Using fallback webhook URL: {fallback_url}")
     return fallback_url
