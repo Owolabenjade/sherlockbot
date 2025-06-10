@@ -1,4 +1,4 @@
-# services/twilio_service.py - Twilio WhatsApp integration
+# services/twilio_service.py - Twilio WhatsApp integration (CORRECTED)
 import os
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
@@ -116,27 +116,35 @@ def send_whatsapp_message_with_media(to, body, media_url):
 def get_firebase_webhook_url():
     """
     Get the correct webhook URL for Firebase Functions
+    FIXED: Proper URL construction for Cloud Functions
     
     Returns:
         str: The webhook URL that Twilio should use
     """
-    # Check if we're running in Firebase Functions
-    if os.getenv('FUNCTION_NAME') or os.getenv('K_SERVICE'):
-        # We're in Firebase Functions - construct the correct URL
-        project_id = os.getenv('GOOGLE_CLOUD_PROJECT') or os.getenv('GCP_PROJECT')
-        region = os.getenv('FUNCTION_REGION', 'us-central1')
-        function_name = os.getenv('FUNCTION_NAME', 'app-function')
+    # Check if we're running in Firebase Functions/Cloud Run
+    if os.getenv('K_SERVICE') or os.getenv('FUNCTION_TARGET'):
+        # We're in Firebase Functions (Cloud Run) - construct the correct URL
+        project_id = os.getenv('GOOGLE_CLOUD_PROJECT') or os.getenv('GCP_PROJECT') or 'cvreview-d1d4b'
         
-        # Use the public Firebase Functions URL
-        return f"https://{region}-{project_id}.cloudfunctions.net/{function_name}/webhook/twilio"
+        # Your function is deployed in africa-south1, not us-central1
+        region = 'africa-south1'
+        function_name = 'app-function'  # This matches your main.py function name
+        
+        # Construct the proper Cloud Functions URL
+        webhook_url = f"https://{region}-{project_id}.cloudfunctions.net/{function_name}/webhook/twilio"
+        
+        logger.info(f"Constructed Firebase webhook URL: {webhook_url}")
+        return webhook_url
     
-    # Fallback to environment variable or default
-    return os.getenv('TWILIO_WEBHOOK_URL', 'https://your-domain.com/webhook/twilio')
+    # Fallback to environment variable or development URL
+    fallback_url = os.getenv('TWILIO_WEBHOOK_URL', 'https://africa-south1-cvreview-d1d4b.cloudfunctions.net/app-function/webhook/twilio')
+    logger.info(f"Using fallback webhook URL: {fallback_url}")
+    return fallback_url
 
 def validate_twilio_request(request):
     """
     Validate that a webhook request is from Twilio
-    Fixed for Firebase Functions URL handling
+    FIXED: Proper URL handling for Firebase Functions
 
     Args:
         request: Flask request object
@@ -157,30 +165,45 @@ def validate_twilio_request(request):
             logger.warning("No X-Twilio-Signature header found")
             return False
 
-        # For Firebase Functions, we need to use the original webhook URL
-        # that Twilio was configured to call, not the internal Firebase URL
+        # Get the correct webhook URL that Twilio was configured to call
         webhook_url = get_firebase_webhook_url()
         
         # Log for debugging
         logger.info(f"Validating Twilio request:")
-        logger.info(f"Webhook URL: {webhook_url}")
-        logger.info(f"Request URL: {request.url}")
+        logger.info(f"Configured webhook URL: {webhook_url}")
+        logger.info(f"Actual request URL: {request.url}")
         logger.info(f"Signature: {signature[:20]}...")
+        logger.info(f"Form data keys: {list(request.form.keys())}")
         
-        # Validate the request using the correct webhook URL
+        # Validate the request using the configured webhook URL
         is_valid = twilio_validator.validate(webhook_url, request.form, signature)
         
-        if not is_valid:
-            logger.error("Twilio signature validation failed")
-            logger.error(f"Form data: {dict(request.form)}")
+        if is_valid:
+            logger.info("✅ Twilio signature validation successful")
+            return True
+        else:
+            logger.error("❌ Twilio signature validation failed with configured URL")
             
-            # Try with the request URL as fallback
+            # Try with the actual request URL as fallback
+            logger.info("Trying validation with actual request URL as fallback...")
             is_valid_fallback = twilio_validator.validate(request.url, request.form, signature)
-            if is_valid_fallback:
-                logger.info("Validation succeeded with request.url as fallback")
-                return True
             
-        return is_valid
+            if is_valid_fallback:
+                logger.info("✅ Validation succeeded with actual request URL")
+                return True
+            else:
+                logger.error("❌ Validation failed with both URLs")
+                
+                # Try with HTTPS version of request URL
+                https_url = request.url.replace('http://', 'https://')
+                if https_url != request.url:
+                    logger.info("Trying with HTTPS version of request URL...")
+                    is_valid_https = twilio_validator.validate(https_url, request.form, signature)
+                    if is_valid_https:
+                        logger.info("✅ Validation succeeded with HTTPS URL")
+                        return True
+                
+                return False
 
     except Exception as e:
         logger.error(f"Error validating Twilio request: {str(e)}")
@@ -204,30 +227,34 @@ def validate_twilio_request_debug(request):
         logger.info("=== TWILIO VALIDATION DEBUG ===")
         logger.info(f"Request URL: {request.url}")
         logger.info(f"Request method: {request.method}")
+        logger.info(f"Content-Type: {request.content_type}")
         logger.info(f"Request headers: {dict(request.headers)}")
         logger.info(f"Request form data: {dict(request.form)}")
         logger.info(f"X-Twilio-Signature: {signature}")
+        logger.info(f"Environment - K_SERVICE: {os.getenv('K_SERVICE')}")
+        logger.info(f"Environment - FUNCTION_TARGET: {os.getenv('FUNCTION_TARGET')}")
+        logger.info(f"Environment - GOOGLE_CLOUD_PROJECT: {os.getenv('GOOGLE_CLOUD_PROJECT')}")
         
         # Try different URL variations
         urls_to_try = [
-            request.url,
-            get_firebase_webhook_url(),
+            get_firebase_webhook_url(),  # The configured URL
+            request.url,  # The actual request URL
             request.url.replace('http://', 'https://'),  # Force HTTPS
-            request.base_url + request.path,  # Reconstruct URL
+            'https://africa-south1-cvreview-d1d4b.cloudfunctions.net/app-function/webhook/twilio',  # Hardcoded correct URL
         ]
         
-        for i, url in enumerate(urls_to_try):
-            logger.info(f"Trying URL {i+1}: {url}")
+        for i, url in enumerate(urls_to_try, 1):
+            logger.info(f"Trying URL {i}: {url}")
             try:
                 is_valid = twilio_validator.validate(url, request.form, signature)
-                logger.info(f"URL {i+1} validation result: {is_valid}")
+                logger.info(f"URL {i} validation result: {is_valid}")
                 if is_valid:
-                    logger.info(f"SUCCESS: Validation passed with URL: {url}")
+                    logger.info(f"🎉 SUCCESS: Validation passed with URL: {url}")
                     return True
             except Exception as e:
-                logger.error(f"URL {i+1} validation error: {str(e)}")
+                logger.error(f"URL {i} validation error: {str(e)}")
         
-        logger.error("All URL validation attempts failed")
+        logger.error("❌ All URL validation attempts failed")
         return False
         
     except Exception as e:
