@@ -106,6 +106,58 @@ def health_check():
         'environment': os.getenv('FLASK_ENV', 'production')
     })
 
+# Debug Firebase endpoint
+@app.route('/debug/firebase')
+def debug_firebase():
+    """Debug Firebase initialization issues"""
+    import os
+    
+    debug_info = {
+        'environment': os.getenv('FLASK_ENV', 'production'),
+        'is_cloud_function': bool(os.getenv('K_SERVICE') or os.getenv('FUNCTION_TARGET')),
+        'env_vars': {
+            'K_SERVICE': os.getenv('K_SERVICE'),
+            'FUNCTION_TARGET': os.getenv('FUNCTION_TARGET'),
+            'GOOGLE_APPLICATION_CREDENTIALS': os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
+            'FIREBASE_STORAGE_BUCKET': os.getenv('FIREBASE_STORAGE_BUCKET'),
+            'FIREBASE_SERVICE_ACCOUNT': os.getenv('FIREBASE_SERVICE_ACCOUNT'),
+            'GCP_PROJECT': os.getenv('GCP_PROJECT'),
+            'GOOGLE_CLOUD_PROJECT': os.getenv('GOOGLE_CLOUD_PROJECT'),
+        }
+    }
+    
+    # Try to initialize Firebase again
+    try:
+        import firebase_admin
+        
+        # Check if already initialized
+        if firebase_admin._apps:
+            debug_info['firebase_status'] = 'already_initialized'
+            debug_info['app_count'] = len(firebase_admin._apps)
+        else:
+            # Try to initialize
+            if os.getenv('K_SERVICE') or os.getenv('FUNCTION_TARGET'):
+                # Cloud Function environment
+                firebase_admin.initialize_app(options={
+                    'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET', 'cvreview-d1d4b.appspot.com')
+                })
+                debug_info['firebase_status'] = 'initialized_with_default_credentials'
+            else:
+                debug_info['firebase_status'] = 'not_in_cloud_function'
+        
+        # Test Firestore connection
+        from firebase_admin import firestore
+        db = firestore.client()
+        # Try a simple read
+        test_collection = db.collection('_test').limit(1).get()
+        debug_info['firestore_test'] = 'connected'
+        
+    except Exception as e:
+        debug_info['firebase_error'] = str(e)
+        debug_info['firebase_status'] = 'error'
+    
+    return jsonify(debug_info)
+
 # Global exception handler
 @app.errorhandler(Exception)
 def handle_exception(e):

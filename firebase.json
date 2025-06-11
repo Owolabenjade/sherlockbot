@@ -1,4 +1,7 @@
 {
+  "projects": {
+    "default": "cvreview-d1d4b"
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
@@ -13,7 +16,12 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "__pycache__"
+        "__pycache__",
+        "*.pyc",
+        ".env*",
+        "test*",
+        "tests",
+        ".pytest_cache"
       ]
     }
   ],
