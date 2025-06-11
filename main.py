@@ -3,8 +3,7 @@ import sys
 import os
 import io
 
-# Add sherlock-bot directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'sherlock-bot'))
+sys.path.insert(0, os.path.dirname(__file__))
 
 @https_fn.on_request(
     region="africa-south1",
