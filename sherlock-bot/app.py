@@ -2,19 +2,14 @@
 import os
 import traceback
 from flask import Flask, request, jsonify
-from dotenv import load_dotenv
-from firebase_init import initialize_firebase
-from middlewares.error_middleware import register_error_handlers
-from middlewares.auth_middleware import auth_middleware
-from routes.webhook_routes import webhook_bp
-from routes.payment_routes import payment_bp
-from routes.admin_routes import admin_bp
-from utils.logger import setup_logger
 
-# Load environment variables
-load_dotenv()
+# Only load environment variables if not in Cloud Functions
+if not os.getenv('K_SERVICE') and not os.getenv('FUNCTION_TARGET'):
+    from dotenv import load_dotenv
+    load_dotenv()
 
 # Initialize logging
+from utils.logger import setup_logger
 logger = setup_logger()
 
 # Initialize Flask app
@@ -30,8 +25,9 @@ try:
 except Exception as e:
     logger.error(f"❌ Error loading configuration: {str(e)}")
 
-# Initialize Firebase
+# Initialize Firebase with error handling
 try:
+    from firebase_init import initialize_firebase
     firebase_initialized = initialize_firebase()
     if not firebase_initialized:
         logger.error("❌ Firebase initialization failed, application may not function correctly")
@@ -43,12 +39,14 @@ except Exception as e:
 
 # Register middlewares with error handling
 try:
+    from middlewares.auth_middleware import auth_middleware
     app.before_request(auth_middleware)
     logger.info("✅ Auth middleware registered")
 except Exception as e:
     logger.error(f"❌ Error registering auth middleware: {str(e)}")
 
 try:
+    from middlewares.error_middleware import register_error_handlers
     register_error_handlers(app)
     logger.info("✅ Error handlers registered")
 except Exception as e:
@@ -68,18 +66,21 @@ def log_response_info(response):
 
 # Register blueprints with error handling
 try:
+    from routes.webhook_routes import webhook_bp
     app.register_blueprint(webhook_bp, url_prefix='/webhook')
     logger.info("✅ Webhook routes registered")
 except Exception as e:
     logger.error(f"❌ Error registering webhook routes: {str(e)}")
 
 try:
+    from routes.payment_routes import payment_bp
     app.register_blueprint(payment_bp, url_prefix='/payment')
     logger.info("✅ Payment routes registered")
 except Exception as e:
     logger.error(f"❌ Error registering payment routes: {str(e)}")
 
 try:
+    from routes.admin_routes import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/admin')
     logger.info("✅ Admin routes registered")
 except Exception as e:
@@ -116,6 +117,8 @@ def handle_exception(e):
         'message': 'An unexpected error occurred'
     }), 500
 
+# IMPORTANT: Only run the server if this file is executed directly
+# This prevents the server from starting during Cloud Functions deployment
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 8080))
     debug = os.getenv('FLASK_ENV') != 'production'

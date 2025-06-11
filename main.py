@@ -1,24 +1,23 @@
 from firebase_functions import https_fn
 import sys
 import os
-from werkzeug.wrappers import Request, Response
-import io
 
 # Add sherlock-bot directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'sherlock-bot'))
 
 @https_fn.on_request(
     region="africa-south1",
-    memory=512,  # Increased memory
-    timeout_sec=300,  # 5 minutes timeout
+    memory=512,
+    timeout_sec=300,
 )
 def app_function(req: https_fn.Request) -> https_fn.Response:
     """HTTP Cloud Function entry point for Sherlock Bot."""
     
     try:
+        # Import Flask app only when the function is called
         from app import app
         
-        # Convert Firebase request to Werkzeug Request
+        # Convert Firebase request to WSGI environ
         environ = {
             'REQUEST_METHOD': req.method,
             'PATH_INFO': req.path or '/',
@@ -30,7 +29,7 @@ def app_function(req: https_fn.Request) -> https_fn.Response:
             'SERVER_PROTOCOL': 'HTTP/1.1',
             'wsgi.version': (1, 0),
             'wsgi.url_scheme': 'https',
-            'wsgi.input': io.BytesIO(req.data),
+            'wsgi.input': __import__('io').BytesIO(req.data),
             'wsgi.errors': sys.stderr,
             'wsgi.multithread': False,
             'wsgi.multiprocess': True,
@@ -54,46 +53,34 @@ def app_function(req: https_fn.Request) -> https_fn.Response:
             return lambda s: None
         
         # Call Flask app
-        try:
-            app_response = app(environ, start_response)
-            response_body = b''.join(app_response)
-            
-            # Extract status and headers
-            status = response_data[0] if response_data else '500 Internal Server Error'
-            headers = response_data[1] if len(response_data) > 1 else []
-            
-            # Convert status to integer
-            status_code = int(status.split()[0])
-            
-            # Convert headers to dict
-            response_headers = {}
-            for header_name, header_value in headers:
-                response_headers[header_name] = header_value
-            
-            return https_fn.Response(
-                response_body,
-                status=status_code,
-                headers=response_headers
-            )
-            
-        except Exception as app_error:
-            print(f"Flask app error: {app_error}")
-            import traceback
-            traceback.print_exc()
-            
-            return https_fn.Response(
-                f"Application error: {str(app_error)}",
-                status=500,
-                headers={'Content-Type': 'text/plain'}
-            )
-            
+        app_response = app(environ, start_response)
+        response_body = b''.join(app_response)
+        
+        # Extract status and headers
+        status = response_data[0] if response_data else '500 Internal Server Error'
+        headers = response_data[1] if len(response_data) > 1 else []
+        
+        # Convert status to integer
+        status_code = int(status.split()[0])
+        
+        # Convert headers to dict
+        response_headers = {}
+        for header_name, header_value in headers:
+            response_headers[header_name] = header_value
+        
+        return https_fn.Response(
+            response_body,
+            status=status_code,
+            headers=response_headers
+        )
+        
     except Exception as e:
         print(f"Function error: {e}")
         import traceback
         traceback.print_exc()
         
         return https_fn.Response(
-            f"Function initialization error: {str(e)}",
+            f"Function error: {str(e)}",
             status=500,
             headers={'Content-Type': 'text/plain'}
         )
