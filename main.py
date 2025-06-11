@@ -3,7 +3,18 @@ import sys
 import os
 import io
 
-sys.path.insert(0, os.path.dirname(__file__))
+# Add sherlock-bot directory to Python path (where app.py actually is)
+sherlock_bot_dir = os.path.join(os.path.dirname(__file__), 'sherlock-bot')
+sys.path.insert(0, sherlock_bot_dir)
+
+# Debug: Print the paths and available files
+print(f"Current working directory: {os.getcwd()}")
+print(f"__file__ directory: {os.path.dirname(__file__)}")
+print(f"sherlock-bot directory: {sherlock_bot_dir}")
+print(f"sherlock-bot exists: {os.path.exists(sherlock_bot_dir)}")
+if os.path.exists(sherlock_bot_dir):
+    print(f"Files in sherlock-bot: {[f for f in os.listdir(sherlock_bot_dir) if f.endswith('.py')]}")
+print(f"sys.path first entry: {sys.path[0]}")
 
 @https_fn.on_request(
     region="africa-south1",
@@ -14,7 +25,12 @@ def app_function(req: https_fn.Request) -> https_fn.Response:
     """HTTP Cloud Function entry point for Sherlock Bot."""
     
     try:
-        # Import Flask app only when the function is called
+        # Debug: Confirm we can see the sherlock-bot directory
+        sherlock_bot_dir = os.path.join(os.path.dirname(__file__), 'sherlock-bot')
+        print(f"Importing from: {sherlock_bot_dir}")
+        print(f"app.py exists: {os.path.exists(os.path.join(sherlock_bot_dir, 'app.py'))}")
+        
+        # Import Flask app from sherlock-bot directory
         from app import app
         
         # Create a proper BytesIO object that supports seeking
