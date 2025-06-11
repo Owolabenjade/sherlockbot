@@ -2,6 +2,8 @@ from firebase_functions import https_fn
 import sys
 import os
 import io
+import json
+from urllib.parse import parse_qs, urlencode
 
 # Add sherlock-bot directory to Python path
 sherlock_bot_dir = os.path.join(os.path.dirname(__file__), 'sherlock-bot')
@@ -19,8 +21,57 @@ def app_function(req: https_fn.Request) -> https_fn.Response:
         # Import Flask app only when the function is called (lazy import)
         from app import app
         
-        # Create a proper BytesIO object that supports seeking
-        body = io.BytesIO(req.data)
+        # Handle request body based on content type
+        body_data = b''
+        content_type = req.headers.get('content-type', '').lower()
+        
+        # Debug logging
+        print(f"Request: {req.method} {req.path}")
+        print(f"Content-Type: {content_type}")
+        print(f"Request data type: {type(req.data)}")
+        print(f"Request data: {req.data}")
+        
+        if req.method == 'POST':
+            if 'application/x-www-form-urlencoded' in content_type:
+                # Handle form data
+                if isinstance(req.data, bytes):
+                    body_data = req.data
+                elif isinstance(req.data, str):
+                    body_data = req.data.encode('utf-8')
+                elif isinstance(req.data, dict):
+                    # If Firebase already parsed it as dict, convert back to form data
+                    body_data = urlencode(req.data).encode('utf-8')
+                else:
+                    # Try to get form data from req.form if available
+                    if hasattr(req, 'form') and req.form:
+                        body_data = urlencode(dict(req.form)).encode('utf-8')
+                    else:
+                        body_data = b''
+            elif 'application/json' in content_type:
+                # Handle JSON data
+                if isinstance(req.data, dict):
+                    body_data = json.dumps(req.data).encode('utf-8')
+                elif isinstance(req.data, str):
+                    body_data = req.data.encode('utf-8')
+                elif isinstance(req.data, bytes):
+                    body_data = req.data
+                else:
+                    body_data = b'{}'
+            else:
+                # Handle other content types
+                if isinstance(req.data, bytes):
+                    body_data = req.data
+                elif isinstance(req.data, str):
+                    body_data = req.data.encode('utf-8')
+                else:
+                    body_data = str(req.data).encode('utf-8')
+        
+        # Create a BytesIO object for the body
+        body = io.BytesIO(body_data)
+        
+        # Log body data for debugging
+        print(f"Body data: {body_data}")
+        print(f"Content-Length: {len(body_data)}")
         
         # Convert Firebase request to WSGI environ
         environ = {
@@ -29,7 +80,7 @@ def app_function(req: https_fn.Request) -> https_fn.Response:
             'PATH_INFO': req.path or '/',
             'QUERY_STRING': req.query_string or '',
             'CONTENT_TYPE': req.headers.get('content-type', 'application/x-www-form-urlencoded'),
-            'CONTENT_LENGTH': str(len(req.data)) if req.data else '0',
+            'CONTENT_LENGTH': str(len(body_data)),
             'SERVER_NAME': req.headers.get('host', '').split(':')[0] if req.headers.get('host') else 'localhost',
             'SERVER_PORT': '443',
             'SERVER_PROTOCOL': 'HTTP/1.1',
@@ -51,11 +102,6 @@ def app_function(req: https_fn.Request) -> https_fn.Response:
         
         # Add REQUEST_URI for better compatibility
         environ['REQUEST_URI'] = req.path or '/'
-        
-        # Log the request for debugging
-        print(f"Request: {req.method} {req.path}")
-        print(f"Content-Type: {environ.get('CONTENT_TYPE')}")
-        print(f"Content-Length: {environ.get('CONTENT_LENGTH')}")
         
         # Create WSGI start_response function
         response_data = []
