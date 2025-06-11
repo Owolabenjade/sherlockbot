@@ -171,9 +171,13 @@ def handle_exception(e):
 
 # IMPORTANT: Only run the server if this file is executed directly
 # This prevents the server from starting during Cloud Functions deployment
-if __name__ == '__main__':
-    port = int(os.getenv('PORT', 8080))
-    debug = os.getenv('FLASK_ENV') != 'production'
-    
-    logger.info(f"🚀 Starting Sherlock Bot on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug)
+if __name__ == '__main__' and os.getenv('FIREBASE_CONFIG') is None:
+    # Extra check to ensure we're not in a Cloud Function environment
+    if not os.getenv('K_SERVICE') and not os.getenv('FUNCTION_TARGET'):
+        port = int(os.getenv('PORT', 8080))
+        debug = os.getenv('FLASK_ENV') != 'production'
+        
+        logger.info(f"🚀 Starting Sherlock Bot on port {port}")
+        app.run(host='0.0.0.0', port=port, debug=debug)
+    else:
+        logger.info("Detected Cloud Function environment, not starting Flask server")
