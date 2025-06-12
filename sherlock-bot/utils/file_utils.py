@@ -42,24 +42,56 @@ def save_temp_file(url, extension):
         filename = f"cv_{int(time.time())}_{uuid.uuid4().hex[:8]}.{extension}"
         file_path = os.path.join(Config.UPLOAD_FOLDER, filename)
         
+        # Log the URL (sanitized for security)
+        logger.info(f"Attempting to download from Twilio media URL")
+        logger.info(f"URL domain: {url.split('/')[2] if '/' in url else 'unknown'}")
+        
         # Download file with Twilio authentication
         # Twilio media URLs require basic authentication
         auth = HTTPBasicAuth(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
         
+        # Add headers that might be required
+        headers = {
+            'User-Agent': 'TwilioWhatsApp/1.0',
+            'Accept': '*/*'
+        }
+        
         logger.info(f"Downloading file from Twilio media URL with authentication")
-        response = requests.get(url, stream=True, timeout=30, auth=auth)
+        logger.info(f"Using Account SID: {Config.TWILIO_ACCOUNT_SID[:8]}...")  # Log first 8 chars only
+        
+        response = requests.get(url, stream=True, timeout=30, auth=auth, headers=headers)
+        
+        if response.status_code == 401:
+            # Try alternative authentication method
+            logger.warning("Basic auth failed, trying with URL parameters")
+            
+            # Parse URL and add auth parameters
+            if '?' in url:
+                auth_url = f"{url}&AccountSid={Config.TWILIO_ACCOUNT_SID}&AuthToken={Config.TWILIO_AUTH_TOKEN}"
+            else:
+                auth_url = f"{url}?AccountSid={Config.TWILIO_ACCOUNT_SID}&AuthToken={Config.TWILIO_AUTH_TOKEN}"
+            
+            response = requests.get(auth_url, stream=True, timeout=30, headers=headers)
         
         if response.status_code != 200:
             logger.error(f"Failed to download file. Status code: {response.status_code}")
             logger.error(f"Response headers: {response.headers}")
+            logger.error(f"Response content: {response.text[:500]}")  # First 500 chars
             raise Exception(f"Failed to download file: {response.status_code}")
         
         # Save file
+        file_size = 0
         with open(file_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+                if chunk:
+                    f.write(chunk)
+                    file_size += len(chunk)
         
-        logger.info(f"Downloaded file to {file_path}")
+        logger.info(f"Downloaded file to {file_path} (size: {file_size} bytes)")
+        
+        # Verify file was downloaded
+        if file_size == 0:
+            raise Exception("Downloaded file is empty")
         
         return file_path
     

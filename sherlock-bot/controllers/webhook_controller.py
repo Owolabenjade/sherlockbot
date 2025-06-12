@@ -126,35 +126,69 @@ To get started, please send me your CV as a PDF or Word document.
 def handle_awaiting_cv_state(resp, session, sender, request, num_media):
     """Handle CV upload state"""
     if num_media > 0:
+        logger.info(f"🔍 Processing {num_media} media attachment(s)")
+        
         # Process media attachment
         for i in range(num_media):
             media_url = request.form.get(f'MediaUrl{i}')
             media_type = request.form.get(f'MediaContentType{i}')
             
-            logger.info(f"📄 Processing media: {media_type}")
+            logger.info(f"📄 Processing media {i+1}: {media_type}")
+            logger.info(f"📎 Media URL received: {media_url[:50]}..." if media_url else "❌ No media URL found")
             
+            # Log all media-related form data for debugging
+            media_fields = {k: v for k, v in request.form.items() if 'Media' in k}
+            logger.info(f"📋 All media fields: {media_fields}")
+            
+            if not media_url:
+                logger.error(f"❌ Missing media URL for attachment {i}")
+                continue
+                
             # Check if it's a supported document type
             if media_type in ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']:
                 try:
+                    logger.info(f"✅ Supported document type detected: {media_type}")
+                    
                     # Get file extension
                     extension = get_file_extension(media_type)
+                    logger.info(f"📁 File extension determined: {extension}")
                     
                     # Download the file
+                    logger.info(f"⬇️ Attempting to download file from: {media_url}")
                     local_file_path = save_temp_file(media_url, extension)
+                    logger.info(f"💾 File saved locally to: {local_file_path}")
+                    
+                    # Verify file was downloaded
+                    if not os.path.exists(local_file_path):
+                        logger.error(f"❌ Downloaded file not found at: {local_file_path}")
+                        resp.message("❌ Failed to download your CV. Please try uploading again.")
+                        return
+                    
+                    file_size = os.path.getsize(local_file_path)
+                    logger.info(f"📊 Downloaded file size: {file_size} bytes")
+                    
+                    if file_size == 0:
+                        logger.error("❌ Downloaded file is empty")
+                        resp.message("❌ The uploaded file appears to be empty. Please try again.")
+                        return
                     
                     # Upload to Firebase Storage
+                    logger.info("☁️ Uploading to Firebase Storage...")
                     from services.firebase_service import upload_cv_to_storage
                     storage_path = upload_cv_to_storage(local_file_path, sender)
+                    logger.info(f"✅ File uploaded to Firebase: {storage_path}")
                     
                     # Store CV path in session
                     session['cv_path'] = storage_path
                     session['cv_filename'] = f"cv.{extension}"
                     session['state'] = STATES['AWAITING_REVIEW_TYPE']
                     update_user_session(sender, session)
+                    logger.info("✅ Session updated with CV information")
                     
                     # Clean up local file
                     if os.path.exists(local_file_path):
                         os.remove(local_file_path)
+                        logger.info("🗑️ Local temporary file cleaned up")
                     
                     # Ask for review type
                     review_type_msg = """✅ CV received successfully!
@@ -177,22 +211,26 @@ Now, please choose your review type:
 Reply with '1' for Basic Review or '2' for Advanced Review."""
                     
                     resp.message(review_type_msg)
-                    logger.info("✅ CV uploaded successfully")
+                    logger.info("✅ CV uploaded successfully, review type menu sent")
                     return
                     
                 except Exception as e:
-                    logger.error(f"Error processing CV: {str(e)}")
+                    logger.error(f"❌ Error processing CV: {str(e)}")
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
                     resp.message("❌ Sorry, I couldn't process your CV. Please make sure it's a valid PDF or Word document and try again.")
                     return
             else:
+                logger.warning(f"⚠️ Unsupported media type: {media_type}")
                 resp.message("❌ Please send a PDF or Word document. Other file types are not supported.")
                 return
         
         # If we get here, no valid document was found
+        logger.warning("⚠️ No valid CV document found in media attachments")
         resp.message("❌ No valid CV document found. Please send your CV as a PDF or Word document.")
     else:
         # No media attached
         message_body = request.form.get('Body', '').strip()
+        logger.info(f"📝 No media attached, text message: {message_body}")
         
         # Check if user wants to restart
         if message_body.lower() in ['restart', 'start over', 'cancel']:
