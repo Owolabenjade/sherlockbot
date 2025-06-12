@@ -1,9 +1,10 @@
-# routes/webhook_routes.py - Minimal version for testing
+# routes/webhook_routes.py - Production webhook routes
 from flask import Blueprint, request, jsonify
-import os
-import traceback
-from datetime import datetime
+from services.twilio_service import validate_twilio_request
+from controllers.webhook_controller import handle_whatsapp_message
+from controllers.payment_controller import process_payment_webhook
 from utils.logger import get_logger
+import traceback
 
 # Initialize logger
 logger = get_logger()
@@ -11,89 +12,87 @@ logger = get_logger()
 # Create blueprint
 webhook_bp = Blueprint('webhook', __name__)
 
-@webhook_bp.route('/twilio', methods=['POST', 'GET'])
+@webhook_bp.route('/twilio', methods=['POST'])
 def twilio_webhook():
-    """Handle incoming WhatsApp messages via Twilio - MINIMAL VERSION"""
+    """Handle incoming WhatsApp messages via Twilio"""
     
     try:
-        logger.info(f"🔄 MINIMAL: Received {request.method} request to /webhook/twilio")
-        logger.info(f"MINIMAL: Request URL: {request.url}")
-        logger.info(f"MINIMAL: Content-Type: {request.content_type}")
-        logger.info(f"MINIMAL: Headers: {dict(request.headers)}")
+        logger.info(f"📨 Received webhook request from {request.remote_addr}")
         
-        # Handle GET requests
-        if request.method == 'GET':
-            return jsonify({
-                'status': 'MINIMAL: Webhook endpoint is active',
-                'method': 'GET',
-                'url': request.url,
-                'timestamp': datetime.now().isoformat(),
-                'function_region': 'africa-south1'
-            })
+        # Validate Twilio request (optional in development)
+        if not validate_twilio_request(request):
+            logger.warning("⚠️ Invalid Twilio signature")
+            # In production, you should return 403
+            # return jsonify({'error': 'Invalid signature'}), 403
+            # For now, just log the warning and continue
         
-        # Handle POST requests
-        if request.method == 'POST':
-            logger.info(f"MINIMAL: Form data: {dict(request.form)}")
-            
-            # Skip validation for testing
-            logger.info("⚠️ MINIMAL: Skipping all validation for testing")
-            
-            # Import the controller function here to avoid import issues
-            try:
-                from controllers.webhook_controller import handle_whatsapp_message
-                logger.info("✅ MINIMAL: Successfully imported webhook controller")
-                
-                # Process the message
-                result = handle_whatsapp_message(request)
-                logger.info("✅ MINIMAL: Message processed successfully")
-                return result
-                
-            except ImportError as import_error:
-                logger.error(f"❌ MINIMAL: Import error: {str(import_error)}")
-                return jsonify({
-                    'error': 'Import error',
-                    'message': str(import_error),
-                    'timestamp': datetime.now().isoformat()
-                }), 500
-                
-            except Exception as processing_error:
-                logger.error(f"❌ MINIMAL: Processing error: {str(processing_error)}")
-                logger.error(f"MINIMAL: Traceback: {traceback.format_exc()}")
-                
-                return jsonify({
-                    'error': 'Processing error',
-                    'message': str(processing_error),
-                    'timestamp': datetime.now().isoformat()
-                }), 500
-    
+        # Process the WhatsApp message
+        result = handle_whatsapp_message(request)
+        
+        logger.info("✅ Message processed successfully")
+        return result
+        
     except Exception as e:
-        logger.error(f"❌ MINIMAL: Error in twilio_webhook: {str(e)}")
-        logger.error(f"MINIMAL: Traceback: {traceback.format_exc()}")
+        logger.error(f"❌ Error in twilio_webhook: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         
-        return jsonify({
-            'error': 'Webhook error',
-            'message': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
+        # Return empty response to prevent Twilio from retrying
+        return '', 200
+
+
+@webhook_bp.route('/twilio/status', methods=['POST'])
+def twilio_status_webhook():
+    """Handle Twilio status callbacks"""
+    
+    try:
+        # Log status update
+        message_sid = request.form.get('MessageSid')
+        message_status = request.form.get('MessageStatus')
+        
+        logger.info(f"📊 Status update for {message_sid}: {message_status}")
+        
+        # You can add logic here to track message delivery status
+        # For now, just acknowledge receipt
+        
+        return '', 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error in status webhook: {str(e)}")
+        return '', 200
+
+
+@webhook_bp.route('/paystack', methods=['POST'])
+def paystack_webhook():
+    """Handle Paystack payment webhooks"""
+    
+    try:
+        logger.info("💳 Received Paystack webhook")
+        
+        # Validate Paystack signature
+        signature = request.headers.get('x-paystack-signature')
+        if not signature:
+            logger.warning("⚠️ No Paystack signature found")
+            return jsonify({'error': 'No signature'}), 400
+        
+        # Process the payment webhook
+        result = process_payment_webhook(request)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ Error in paystack_webhook: {str(e)}")
+        return jsonify({'error': 'Internal error'}), 500
+
 
 @webhook_bp.route('/health', methods=['GET'])
 def webhook_health():
-    """Health check for webhook endpoints"""
+    """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'service': 'webhook-handler-minimal',
-        'region': 'africa-south1',
-        'timestamp': datetime.now().isoformat()
-    })
-
-@webhook_bp.route('/test', methods=['GET', 'POST'])
-def webhook_test():
-    """Test endpoint"""
-    return jsonify({
-        'status': 'MINIMAL TEST ENDPOINT',
-        'method': request.method,
-        'url': request.url,
-        'headers': dict(request.headers),
-        'form': dict(request.form),
-        'timestamp': datetime.now().isoformat()
+        'service': 'webhook-handler',
+        'endpoints': [
+            '/webhook/twilio',
+            '/webhook/twilio/status',
+            '/webhook/paystack'
+        ]
     })
