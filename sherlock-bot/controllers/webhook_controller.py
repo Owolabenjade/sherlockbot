@@ -414,7 +414,7 @@ Your comprehensive PDF report includes:
 ✅ Keyword optimization suggestions
 
 💡 The report link will be active for 24 hours. {
-'We\'ve also sent it to your email.' if result.get('email_sent') else 'Save it for future reference.'
+'We have also sent it to your email.' if result.get('email_sent') else 'Save it for future reference.'
 }
 
 Type 'start' to review another CV."""
