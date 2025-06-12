@@ -3,7 +3,7 @@ import os
 import uuid
 import time
 import requests
-from requests.auth import HTTPBasicAuth
+from twilio.rest import Client
 from config import Config
 from utils.logger import get_logger
 
@@ -44,39 +44,83 @@ def save_temp_file(url, extension):
         
         # Log the URL (sanitized for security)
         logger.info(f"Attempting to download from Twilio media URL")
-        logger.info(f"URL domain: {url.split('/')[2] if '/' in url else 'unknown'}")
+        logger.info(f"URL: {url[:80]}..." if len(url) > 80 else f"URL: {url}")
         
-        # Download file with Twilio authentication
-        # Twilio media URLs require basic authentication
-        auth = HTTPBasicAuth(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+        # Parse the URL to extract message SID and media SID
+        # URL format: https://api.twilio.com/2010-04-01/Accounts/{AccountSid}/Messages/{MessageSid}/Media/{MediaSid}
+        url_parts = url.split('/')
         
-        # Add headers that might be required
+        if 'Messages' in url and 'Media' in url:
+            # Extract the Message SID and Media SID from the URL
+            message_sid_index = url_parts.index('Messages') + 1
+            media_sid_index = url_parts.index('Media') + 1
+            
+            message_sid = url_parts[message_sid_index]
+            media_sid = url_parts[media_sid_index]
+            
+            logger.info(f"Message SID: {message_sid}")
+            logger.info(f"Media SID: {media_sid}")
+            
+            # Initialize Twilio client
+            client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+            
+            # Get the media resource
+            try:
+                media = client.messages(message_sid).media(media_sid).fetch()
+                
+                # Get the actual media URL with authentication
+                # The media.uri gives us the path, we need to construct the full URL
+                media_url = f"https://api.twilio.com{media.uri}"
+                
+                # Remove .json extension if present
+                if media_url.endswith('.json'):
+                    media_url = media_url[:-5]
+                
+                logger.info(f"Fetching media from authenticated URL")
+                
+                # Now download with authentication
+                auth = (Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+                response = requests.get(media_url, stream=True, timeout=30, auth=auth)
+                
+                if response.status_code == 200:
+                    # Save file
+                    file_size = 0
+                    with open(file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                file_size += len(chunk)
+                    
+                    logger.info(f"Downloaded file to {file_path} (size: {file_size} bytes)")
+                    
+                    # Verify file was downloaded
+                    if file_size == 0:
+                        raise Exception("Downloaded file is empty")
+                    
+                    return file_path
+                else:
+                    logger.error(f"Failed to download media. Status: {response.status_code}")
+                    logger.error(f"Response: {response.text[:500]}")
+                    raise Exception(f"Failed to download file: {response.status_code}")
+                    
+            except Exception as e:
+                logger.error(f"Error using Twilio SDK: {str(e)}")
+                # Fallback to direct download with basic auth
+                logger.info("Falling back to direct download method")
+                
+        # Fallback method - direct download with basic auth
+        auth = (Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
         headers = {
             'User-Agent': 'TwilioWhatsApp/1.0',
             'Accept': '*/*'
         }
         
-        logger.info(f"Downloading file from Twilio media URL with authentication")
-        logger.info(f"Using Account SID: {Config.TWILIO_ACCOUNT_SID[:8]}...")  # Log first 8 chars only
-        
         response = requests.get(url, stream=True, timeout=30, auth=auth, headers=headers)
-        
-        if response.status_code == 401:
-            # Try alternative authentication method
-            logger.warning("Basic auth failed, trying with URL parameters")
-            
-            # Parse URL and add auth parameters
-            if '?' in url:
-                auth_url = f"{url}&AccountSid={Config.TWILIO_ACCOUNT_SID}&AuthToken={Config.TWILIO_AUTH_TOKEN}"
-            else:
-                auth_url = f"{url}?AccountSid={Config.TWILIO_ACCOUNT_SID}&AuthToken={Config.TWILIO_AUTH_TOKEN}"
-            
-            response = requests.get(auth_url, stream=True, timeout=30, headers=headers)
         
         if response.status_code != 200:
             logger.error(f"Failed to download file. Status code: {response.status_code}")
-            logger.error(f"Response headers: {response.headers}")
-            logger.error(f"Response content: {response.text[:500]}")  # First 500 chars
+            logger.error(f"Response headers: {dict(response.headers)}")
+            logger.error(f"Response content: {response.text[:500]}")
             raise Exception(f"Failed to download file: {response.status_code}")
         
         # Save file
