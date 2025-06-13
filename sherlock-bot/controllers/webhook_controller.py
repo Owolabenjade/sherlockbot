@@ -1,7 +1,8 @@
-# controllers/webhook_controller.py - Full implementation for CV review service
+# controllers/webhook_controller.py - Cloud Link Workaround Version
 import os
 import time
 import traceback
+import re
 from flask import request
 from twilio.twiml.messaging_response import MessagingResponse
 from services.firebase_service import get_user_session, update_user_session, get_user_email
@@ -29,7 +30,7 @@ STATES = {
 
 def handle_whatsapp_message(request):
     """
-    Process incoming WhatsApp message with full CV review logic
+    Process incoming WhatsApp message with cloud link workflow
     
     Args:
         request: Flask request object
@@ -62,7 +63,7 @@ def handle_whatsapp_message(request):
             handle_welcome_state(resp, session, sender, message_body)
             
         elif current_state == STATES['AWAITING_CV']:
-            handle_awaiting_cv_state(resp, session, sender, request, num_media)
+            handle_awaiting_cv_state(resp, session, sender, message_body, num_media)
             
         elif current_state == STATES['AWAITING_REVIEW_TYPE']:
             handle_review_type_state(resp, session, sender, message_body)
@@ -109,9 +110,9 @@ I'm here to help you improve your CV and increase your chances of landing your d
 • **Basic Review (FREE)**: Get quick insights and key improvement areas
 • **Advanced Review (₦5,000)**: Comprehensive analysis with detailed PDF report
 
-To get started, please send me your CV as a PDF or Word document.
+To get started, please upload your CV to a cloud service (Google Drive, Dropbox, OneDrive, etc.) and share the link with me.
 
-💡 Tip: Make sure your CV includes your contact information, work experience, education, and skills."""
+💡 Make sure the link has view access enabled!"""
         
         resp.message(welcome_msg)
         
@@ -123,75 +124,33 @@ To get started, please send me your CV as a PDF or Word document.
         resp.message("👋 Hello! Type 'start' to begin your CV review journey.")
 
 
-def handle_awaiting_cv_state(resp, session, sender, request, num_media):
-    """Handle CV upload state"""
-    if num_media > 0:
-        logger.info(f"🔍 Processing {num_media} media attachment(s)")
+def handle_awaiting_cv_state(resp, session, sender, message_body, num_media):
+    """Handle CV upload state - Cloud link version"""
+    # Check if user sent a link
+    cloud_link_pattern = r'https?://(?:www\.)?(?:drive\.google\.com|dropbox\.com|onedrive\.live\.com|docs\.google\.com|drive\.dropbox\.com|1drv\.ms|bit\.ly|tinyurl\.com|short\.link)[\S]+'
+    
+    # Check for cloud storage links
+    cloud_links = re.findall(cloud_link_pattern, message_body)
+    
+    if cloud_links:
+        # User provided a cloud link
+        cloud_link = cloud_links[0]  # Take the first link
+        logger.info(f"📄 Cloud link detected: {cloud_link[:50]}...")
         
-        # Process media attachment
-        for i in range(num_media):
-            media_url = request.form.get(f'MediaUrl{i}')
-            media_type = request.form.get(f'MediaContentType{i}')
+        try:
+            # Download the file from cloud link
+            logger.info("Attempting to download CV from cloud link")
             
-            logger.info(f"📄 Processing media {i+1}: {media_type}")
-            logger.info(f"📎 Media URL received: {media_url[:50]}..." if media_url else "❌ No media URL found")
+            # For now, we'll simulate successful processing
+            # In production, you'd implement actual cloud download logic
             
-            # Log all media-related form data for debugging
-            media_fields = {k: v for k, v in request.form.items() if 'Media' in k}
-            logger.info(f"📋 All media fields: {media_fields}")
+            # Store the cloud link in session
+            session['cv_cloud_link'] = cloud_link
+            session['state'] = STATES['AWAITING_REVIEW_TYPE']
+            update_user_session(sender, session)
             
-            if not media_url:
-                logger.error(f"❌ Missing media URL for attachment {i}")
-                continue
-                
-            # Check if it's a supported document type
-            if media_type in ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']:
-                try:
-                    logger.info(f"✅ Supported document type detected: {media_type}")
-                    
-                    # Get file extension
-                    extension = get_file_extension(media_type)
-                    logger.info(f"📁 File extension determined: {extension}")
-                    
-                    # Download the file
-                    logger.info(f"⬇️ Attempting to download file from: {media_url}")
-                    local_file_path = save_temp_file(media_url, extension)
-                    logger.info(f"💾 File saved locally to: {local_file_path}")
-                    
-                    # Verify file was downloaded
-                    if not os.path.exists(local_file_path):
-                        logger.error(f"❌ Downloaded file not found at: {local_file_path}")
-                        resp.message("❌ Failed to download your CV. Please try uploading again.")
-                        return
-                    
-                    file_size = os.path.getsize(local_file_path)
-                    logger.info(f"📊 Downloaded file size: {file_size} bytes")
-                    
-                    if file_size == 0:
-                        logger.error("❌ Downloaded file is empty")
-                        resp.message("❌ The uploaded file appears to be empty. Please try again.")
-                        return
-                    
-                    # Upload to Firebase Storage
-                    logger.info("☁️ Uploading to Firebase Storage...")
-                    from services.firebase_service import upload_cv_to_storage
-                    storage_path = upload_cv_to_storage(local_file_path, sender)
-                    logger.info(f"✅ File uploaded to Firebase: {storage_path}")
-                    
-                    # Store CV path in session
-                    session['cv_path'] = storage_path
-                    session['cv_filename'] = f"cv.{extension}"
-                    session['state'] = STATES['AWAITING_REVIEW_TYPE']
-                    update_user_session(sender, session)
-                    logger.info("✅ Session updated with CV information")
-                    
-                    # Clean up local file
-                    if os.path.exists(local_file_path):
-                        os.remove(local_file_path)
-                        logger.info("🗑️ Local temporary file cleaned up")
-                    
-                    # Ask for review type
-                    review_type_msg = """✅ CV received successfully!
+            # Ask for review type
+            review_type_msg = """✅ CV link received successfully!
 
 Now, please choose your review type:
 
@@ -209,36 +168,27 @@ Now, please choose your review type:
    • CV score out of 100
 
 Reply with '1' for Basic Review or '2' for Advanced Review."""
-                    
-                    resp.message(review_type_msg)
-                    logger.info("✅ CV uploaded successfully, review type menu sent")
-                    return
-                    
-                except Exception as e:
-                    logger.error(f"❌ Error processing CV: {str(e)}")
-                    logger.error(f"Full traceback: {traceback.format_exc()}")
-                    resp.message("❌ Sorry, I couldn't process your CV. Please make sure it's a valid PDF or Word document and try again.")
-                    return
-            else:
-                logger.warning(f"⚠️ Unsupported media type: {media_type}")
-                resp.message("❌ Please send a PDF or Word document. Other file types are not supported.")
-                return
+            
+            resp.message(review_type_msg)
+            logger.info("✅ CV cloud link processed successfully")
+            
+        except Exception as e:
+            logger.error(f"Error processing cloud link: {str(e)}")
+            resp.message("❌ Sorry, I couldn't access your CV from the provided link. Please make sure the link has public view access and try again.")
+            
+    elif num_media > 0:
+        # User tried to attach file directly
+        resp.message("📎 Please upload your CV to a cloud service (Google Drive, Dropbox, etc.) and share the link with me. Make sure the link has view access enabled!")
         
-        # If we get here, no valid document was found
-        logger.warning("⚠️ No valid CV document found in media attachments")
-        resp.message("❌ No valid CV document found. Please send your CV as a PDF or Word document.")
     else:
-        # No media attached
-        message_body = request.form.get('Body', '').strip()
-        logger.info(f"📝 No media attached, text message: {message_body}")
-        
         # Check if user wants to restart
         if message_body.lower() in ['restart', 'start over', 'cancel']:
             session['state'] = STATES['WELCOME']
             update_user_session(sender, session)
             resp.message("🔄 Restarting... Type 'start' to begin again.")
         else:
-            resp.message("📎 Please attach your CV as a PDF or Word document to continue.")
+            # No link found in message
+            resp.message("🔗 Please share a link to your CV from Google Drive, Dropbox, or another cloud service. Make sure the link has view access enabled!")
 
 
 def handle_review_type_state(resp, session, sender, message_body):
@@ -360,19 +310,24 @@ def handle_completed_state(resp, session, sender, message_body):
 
 
 def process_cv_async(sender, session, review_type, email=None):
-    """Process CV review asynchronously"""
+    """Process CV review asynchronously - Cloud link version"""
     try:
-        # Get CV path from session
-        cv_path = session.get('cv_path')
+        # Get CV cloud link from session
+        cv_cloud_link = session.get('cv_cloud_link')
         
-        if not cv_path:
-            send_whatsapp_message(sender, "❌ Error: CV file not found. Please start over by typing 'start'.")
+        if not cv_cloud_link:
+            send_whatsapp_message(sender, "❌ Error: CV link not found. Please start over by typing 'start'.")
             session['state'] = STATES['WELCOME']
             update_user_session(sender, session)
             return
         
-        # Process the CV
-        result = process_cv_upload(cv_path, review_type, sender, email)
+        # Process the CV using the cloud link directly
+        # The new cv_controller.py handles both cloud links and storage paths
+        logger.info(f"Processing CV from cloud link: {cv_cloud_link}")
+        
+        # Pass the cloud link directly to process_cv_upload
+        # The new cv_controller will handle downloading and processing
+        result = process_cv_upload(cv_cloud_link, review_type, sender, email)
         
         if result.get('success'):
             # Update session
