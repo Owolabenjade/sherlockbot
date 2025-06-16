@@ -11,6 +11,7 @@
       "source": ".",
       "codebase": "default",
       "runtime": "python311",
+      "region": "africa-south1",
       "ignore": [
         "venv",
         ".venv",
@@ -49,7 +50,21 @@
         ".gcloudignore",
         "README.md",
         "*.md"
-      ]
+      ],
+      "environmentVariables": {
+        "TWILIO_ACCOUNT_SID": "${TWILIO_ACCOUNT_SID}",
+        "TWILIO_AUTH_TOKEN": "${TWILIO_AUTH_TOKEN}",
+        "TWILIO_PHONE_NUMBER": "${TWILIO_PHONE_NUMBER}",
+        "PAYSTACK_SECRET_KEY": "${PAYSTACK_SECRET_KEY}",
+        "PAYSTACK_PUBLIC_KEY": "${PAYSTACK_PUBLIC_KEY}",
+        "SENDGRID_API_KEY": "${SENDGRID_API_KEY}",
+        "EMAIL_FROM": "${EMAIL_FROM}",
+        "EMAIL_FROM_NAME": "${EMAIL_FROM_NAME}",
+        "ADMIN_USERNAME": "${ADMIN_USERNAME}",
+        "ADMIN_PASSWORD": "${ADMIN_PASSWORD}",
+        "CV_ANALYSIS_API_URL": "${CV_ANALYSIS_API_URL}",
+        "STORAGE_BUCKET": "${STORAGE_BUCKET}"
+      }
     }
   ],
   "hosting": {
