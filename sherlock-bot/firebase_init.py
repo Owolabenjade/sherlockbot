@@ -1,4 +1,4 @@
-# firebase_init.py - Firebase initialization
+# firebase_init.py
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
@@ -9,7 +9,7 @@ logger = get_logger()
 
 def initialize_firebase():
     """
-    Initialize Firebase Admin SDK for use across the application
+    Initialize Firebase Admin SDK for use across the application - FIXED VERSION
     
     Returns:
         bool: Whether initialization was successful
@@ -20,11 +20,10 @@ def initialize_firebase():
             logger.info("Firebase already initialized")
             return True
         
-        # Get storage bucket - with fallback to your project
-        storage_bucket = os.getenv('FIREBASE_STORAGE_BUCKET', 'cvreview-d1d4b.appspot.com')
+        # FIXED: Use correct storage bucket format
+        storage_bucket = os.getenv('FIREBASE_STORAGE_BUCKET', 'cvreview-d1d4b.firebasestorage.app')
         
         # Check if we're in Cloud Functions/Cloud Run
-        # Cloud Functions set these environment variables
         if os.getenv('K_SERVICE') or os.getenv('FUNCTION_TARGET') or os.getenv('GOOGLE_CLOUD_PROJECT'):
             # We're in Cloud Functions - use Application Default Credentials
             logger.info("Detected Cloud Functions environment")
@@ -45,7 +44,7 @@ def initialize_firebase():
                     'storageBucket': storage_bucket
                 })
             else:
-                # Try with default credentials anyway (might work on Google Cloud Shell, etc)
+                # Try with default credentials anyway
                 logger.warning("No service account found, attempting default credentials")
                 try:
                     firebase_admin.initialize_app(options={
@@ -61,12 +60,13 @@ def initialize_firebase():
         logger.info("Testing Firebase connection...")
         db = firestore.client()
         bucket = storage.bucket()
-        logger.info(f"Storage bucket name: {bucket.name}")
+        logger.info(f"✅ Storage bucket name: {bucket.name}")
+        logger.info(f"✅ Firestore connected successfully")
         
-        logger.info("Firebase initialized successfully")
+        logger.info("🎉 Firebase initialized successfully")
         return True
     
     except Exception as e:
-        logger.error(f"Error initializing Firebase: {str(e)}")
+        logger.error(f"❌ Error initializing Firebase: {str(e)}")
         logger.error(f"Environment: K_SERVICE={os.getenv('K_SERVICE')}, FUNCTION_TARGET={os.getenv('FUNCTION_TARGET')}")
         return False

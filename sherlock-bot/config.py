@@ -1,4 +1,4 @@
-# config.py - Configuration settings
+# config.py
 import os
 from dotenv import load_dotenv
 
@@ -15,8 +15,8 @@ class Config:
     TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
     TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
     
-    # Firebase configuration
-    FIREBASE_STORAGE_BUCKET = os.getenv('FIREBASE_STORAGE_BUCKET')
+    # Firebase configuration - FIXED BUCKET NAME
+    FIREBASE_STORAGE_BUCKET = os.getenv('FIREBASE_STORAGE_BUCKET', 'cvreview-d1d4b.firebasestorage.app')
     
     # Paystack configuration
     PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_SECRET_KEY')
