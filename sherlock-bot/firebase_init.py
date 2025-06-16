@@ -9,7 +9,7 @@ logger = get_logger()
 
 def initialize_firebase():
     """
-    Initialize Firebase Admin SDK for use across the application - FIXED VERSION
+    Initialize Firebase Admin SDK for use across the application
     
     Returns:
         bool: Whether initialization was successful
@@ -20,8 +20,8 @@ def initialize_firebase():
             logger.info("Firebase already initialized")
             return True
         
-        # FIXED: Use correct storage bucket format
-        storage_bucket = os.getenv('FIREBASE_STORAGE_BUCKET', 'cvreview-d1d4b.firebasestorage.app')
+        # Use allowed environment variable name
+        storage_bucket = os.getenv('STORAGE_BUCKET', 'cvreview-d1d4b.firebasestorage.app')
         
         # Check if we're in Cloud Functions/Cloud Run
         if os.getenv('K_SERVICE') or os.getenv('FUNCTION_TARGET') or os.getenv('GOOGLE_CLOUD_PROJECT'):
@@ -36,7 +36,7 @@ def initialize_firebase():
             logger.info("Initialized Firebase with Application Default Credentials")
         else:
             # Local development - use service account
-            cred_path = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+            cred_path = os.getenv('SERVICE_ACCOUNT_PATH')  # Also changed this
             if cred_path and os.path.exists(cred_path):
                 logger.info(f"Initializing Firebase with service account: {cred_path}")
                 cred = credentials.Certificate(cred_path)
@@ -53,7 +53,7 @@ def initialize_firebase():
                     logger.info("Initialized with default credentials")
                 except Exception as default_error:
                     logger.error(f"Failed to initialize with default credentials: {default_error}")
-                    logger.error("FIREBASE_SERVICE_ACCOUNT not set and default credentials failed")
+                    logger.error("SERVICE_ACCOUNT_PATH not set and default credentials failed")
                     return False
         
         # Test the connection
