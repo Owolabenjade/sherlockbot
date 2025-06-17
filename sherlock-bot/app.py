@@ -8,87 +8,110 @@ if not os.getenv('K_SERVICE') and not os.getenv('FUNCTION_TARGET'):
     from dotenv import load_dotenv
     load_dotenv()
 
-# Initialize logging
-from utils.logger import setup_logger
-logger = setup_logger()
-
 # Initialize Flask app
 app = Flask(__name__, 
     static_folder='static',
     template_folder='templates'
 )
 
-# Load configuration with error handling
-try:
-    app.config.from_object('config.Config')
-    logger.info("✅ Configuration loaded successfully")
-except Exception as e:
-    logger.error(f"❌ Error loading configuration: {str(e)}")
+# Global flag to track initialization
+_initialized = False
+firebase_initialized = False
+logger = None
 
-# Initialize Firebase with error handling
-try:
-    from firebase_init import initialize_firebase
-    firebase_initialized = initialize_firebase()
-    if not firebase_initialized:
-        logger.error("❌ Firebase initialization failed, application may not function correctly")
-    else:
-        logger.info("✅ Firebase initialized successfully")
-except Exception as e:
-    logger.error(f"❌ Firebase initialization error: {str(e)}")
-    firebase_initialized = False
+def initialize_app():
+    """Initialize the app - called only when needed"""
+    global _initialized, firebase_initialized, logger
+    
+    if _initialized:
+        return
+    
+    _initialized = True
+    
+    # Initialize logging
+    from utils.logger import setup_logger
+    logger = setup_logger()
+    
+    # Load configuration with error handling
+    try:
+        app.config.from_object('config.Config')
+        logger.info("✅ Configuration loaded successfully")
+    except Exception as e:
+        logger.error(f"❌ Error loading configuration: {str(e)}")
 
-# Register middlewares with error handling
-try:
-    from middlewares.auth_middleware import auth_middleware
-    app.before_request(auth_middleware)
-    logger.info("✅ Auth middleware registered")
-except Exception as e:
-    logger.error(f"❌ Error registering auth middleware: {str(e)}")
+    # Initialize Firebase with error handling
+    try:
+        from firebase_init import initialize_firebase
+        firebase_initialized = initialize_firebase()
+        if not firebase_initialized:
+            logger.error("❌ Firebase initialization failed, application may not function correctly")
+        else:
+            logger.info("✅ Firebase initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Firebase initialization error: {str(e)}")
+        firebase_initialized = False
 
-try:
-    from middlewares.error_middleware import register_error_handlers
-    register_error_handlers(app)
-    logger.info("✅ Error handlers registered")
-except Exception as e:
-    logger.error(f"❌ Error registering error handlers: {str(e)}")
+    # Register middlewares with error handling
+    try:
+        from middlewares.auth_middleware import auth_middleware
+        app.before_request(auth_middleware)
+        logger.info("✅ Auth middleware registered")
+    except Exception as e:
+        logger.error(f"❌ Error registering auth middleware: {str(e)}")
+
+    try:
+        from middlewares.error_middleware import register_error_handlers
+        register_error_handlers(app)
+        logger.info("✅ Error handlers registered")
+    except Exception as e:
+        logger.error(f"❌ Error registering error handlers: {str(e)}")
+
+    # Register blueprints with error handling
+    try:
+        from routes.webhook_routes import webhook_bp
+        app.register_blueprint(webhook_bp, url_prefix='/webhook')
+        logger.info("✅ Webhook routes registered")
+    except Exception as e:
+        logger.error(f"❌ Error registering webhook routes: {str(e)}")
+
+    try:
+        from routes.payment_routes import payment_bp
+        app.register_blueprint(payment_bp, url_prefix='/payment')
+        logger.info("✅ Payment routes registered")
+    except Exception as e:
+        logger.error(f"❌ Error registering payment routes: {str(e)}")
+
+    try:
+        from routes.admin_routes import admin_bp
+        app.register_blueprint(admin_bp, url_prefix='/admin')
+        logger.info("✅ Admin routes registered")
+    except Exception as e:
+        logger.error(f"❌ Error registering admin routes: {str(e)}")
 
 # Add request logging for debugging
 @app.before_request
 def log_request_info():
-    logger.info(f"🔄 {request.method} {request.path}")
-    if request.form:
-        logger.info(f"📝 Form data keys: {list(request.form.keys())}")
+    # Initialize app if not already done
+    if not _initialized:
+        initialize_app()
+    
+    if logger:
+        logger.info(f"🔄 {request.method} {request.path}")
+        if request.form:
+            logger.info(f"📝 Form data keys: {list(request.form.keys())}")
 
 @app.after_request
 def log_response_info(response):
-    logger.info(f"✅ Response: {response.status_code} for {request.path}")
+    if logger:
+        logger.info(f"✅ Response: {response.status_code} for {request.path}")
     return response
-
-# Register blueprints with error handling
-try:
-    from routes.webhook_routes import webhook_bp
-    app.register_blueprint(webhook_bp, url_prefix='/webhook')
-    logger.info("✅ Webhook routes registered")
-except Exception as e:
-    logger.error(f"❌ Error registering webhook routes: {str(e)}")
-
-try:
-    from routes.payment_routes import payment_bp
-    app.register_blueprint(payment_bp, url_prefix='/payment')
-    logger.info("✅ Payment routes registered")
-except Exception as e:
-    logger.error(f"❌ Error registering payment routes: {str(e)}")
-
-try:
-    from routes.admin_routes import admin_bp
-    app.register_blueprint(admin_bp, url_prefix='/admin')
-    logger.info("✅ Admin routes registered")
-except Exception as e:
-    logger.error(f"❌ Error registering admin routes: {str(e)}")
 
 # Root endpoint
 @app.route('/')
 def index():
+    if not _initialized:
+        initialize_app()
+    
     return jsonify({
         'service': 'Sherlock Bot CV Review Service',
         'status': 'active',
@@ -99,6 +122,9 @@ def index():
 # Health check endpoint
 @app.route('/health')
 def health_check():
+    if not _initialized:
+        initialize_app()
+    
     return jsonify({
         'status': 'ok',
         'firebase': 'connected' if firebase_initialized else 'disconnected',
@@ -110,6 +136,9 @@ def health_check():
 @app.route('/debug/firebase')
 def debug_firebase():
     """Debug Firebase initialization issues"""
+    if not _initialized:
+        initialize_app()
+    
     import os
     
     debug_info = {
@@ -161,8 +190,9 @@ def debug_firebase():
 # Global exception handler
 @app.errorhandler(Exception)
 def handle_exception(e):
-    logger.error(f"❌ Unhandled exception: {str(e)}")
-    logger.error(f"Traceback: {traceback.format_exc()}")
+    if logger:
+        logger.error(f"❌ Unhandled exception: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
     
     return jsonify({
         'error': 'Internal Server Error',
@@ -174,10 +204,15 @@ def handle_exception(e):
 if __name__ == '__main__' and os.getenv('FIREBASE_CONFIG') is None:
     # Extra check to ensure we're not in a Cloud Function environment
     if not os.getenv('K_SERVICE') and not os.getenv('FUNCTION_TARGET'):
+        # Initialize for local development
+        initialize_app()
+        
         port = int(os.getenv('PORT', 8080))
         debug = os.getenv('FLASK_ENV') != 'production'
         
-        logger.info(f"🚀 Starting Sherlock Bot on port {port}")
+        if logger:
+            logger.info(f"🚀 Starting Sherlock Bot on port {port}")
         app.run(host='0.0.0.0', port=port, debug=debug)
     else:
-        logger.info("Detected Cloud Function environment, not starting Flask server")
+        if logger:
+            logger.info("Detected Cloud Function environment, not starting Flask server")
