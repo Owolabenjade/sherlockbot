@@ -5,6 +5,7 @@ import time
 import requests
 import PyPDF2
 import docx
+import traceback
 from datetime import datetime
 import re
 from reportlab.lib.pagesizes import letter
@@ -463,12 +464,14 @@ def analyze_cv_advanced(cv_data):
 
 
 def call_cv_analysis_api(cv_data, review_type):
-    """Call external CV analysis API with fallback"""
+    """Call external CV analysis API with better logging and fallback"""
     try:
         local_file_path = cv_data.get('file_path', None)
         if not local_file_path:
             logger.error("File path missing from CV data")
             return analyze_cv_fallback(cv_data, review_type)
+
+        logger.info(f"📤 Calling CV API with file: {os.path.basename(local_file_path)}")
 
         files = {
             'cv': (os.path.basename(local_file_path), open(local_file_path, 'rb'), 'application/octet-stream')
@@ -480,6 +483,8 @@ def call_cv_analysis_api(cv_data, review_type):
         }
 
         api_url = Config.CV_ANALYSIS_API_URL
+        logger.info(f"🌐 API URL: {api_url}")
+        
         response = requests.post(
             api_url,
             files=files,
@@ -490,19 +495,38 @@ def call_cv_analysis_api(cv_data, review_type):
         # Close file after upload
         files['cv'][1].close()
 
+        logger.info(f"📥 API Response Status: {response.status_code}")
+        
         if response.status_code != 200:
-            logger.error(f"API returned status {response.status_code}: {response.text}")
+            logger.error(f"API returned status {response.status_code}: {response.text[:500]}")
             return analyze_cv_fallback(cv_data, review_type)
 
-        result = response.json()
+        try:
+            result = response.json()
+            logger.info(f"📊 API Response Keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
+            logger.info(f"📝 API Response Sample: {str(result)[:500]}")
+        except Exception as json_error:
+            logger.error(f"Failed to parse API JSON response: {json_error}")
+            logger.error(f"Raw response: {response.text[:500]}")
+            return analyze_cv_fallback(cv_data, review_type)
 
         if review_type == 'basic':
-            return process_basic_api_response(result)
+            processed_result = process_basic_api_response(result)
         else:
-            return process_advanced_api_response(result)
+            processed_result = process_advanced_api_response(result)
+            
+        logger.info(f"✅ Processed result has {len(processed_result.get('insights', []))} insights")
+        
+        # If no insights from API, use fallback
+        if not processed_result.get('insights'):
+            logger.warning("⚠️ No insights from API, using fallback")
+            return analyze_cv_fallback(cv_data, review_type)
+            
+        return processed_result
 
     except Exception as e:
         logger.error(f"Error calling CV analysis API: {str(e)}")
+        logger.error(f"Full error: {traceback.format_exc()}")
         return analyze_cv_fallback(cv_data, review_type)
 
 
