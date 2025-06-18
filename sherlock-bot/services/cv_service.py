@@ -464,7 +464,7 @@ def analyze_cv_advanced(cv_data):
 
 
 def call_cv_analysis_api(cv_data, review_type):
-    """Call external CV analysis API with better logging and fallback"""
+    """Call external CV analysis API with correct parameters"""
     try:
         local_file_path = cv_data.get('file_path', None)
         if not local_file_path:
@@ -473,27 +473,27 @@ def call_cv_analysis_api(cv_data, review_type):
 
         logger.info(f"📤 Calling CV API with file: {os.path.basename(local_file_path)}")
 
-        files = {
-            'cv': (os.path.basename(local_file_path), open(local_file_path, 'rb'), 'application/octet-stream')
-        }
+        # Open file for upload
+        with open(local_file_path, 'rb') as f:
+            files = {
+                'cv': (os.path.basename(local_file_path), f, 'application/octet-stream')
+            }
 
-        form_data = {
-            'job_title': 'General Application',
-            'job_description': 'CV review for job applications across various industries'
-        }
+            # FIXED: Use correct form data with all three required fields
+            form_data = {
+                'job_title': 'General Application',  # Can be customized based on user input
+                'job_description': 'Seeking opportunities in various industries. Review CV for general job applications including corporate, technical, and professional roles.'
+            }
 
-        api_url = Config.CV_ANALYSIS_API_URL
-        logger.info(f"🌐 API URL: {api_url}")
-        
-        response = requests.post(
-            api_url,
-            files=files,
-            data=form_data,
-            timeout=60
-        )
-
-        # Close file after upload
-        files['cv'][1].close()
+            api_url = Config.CV_ANALYSIS_API_URL
+            logger.info(f"🌐 API URL: {api_url}")
+            
+            response = requests.post(
+                api_url,
+                files=files,
+                data=form_data,
+                timeout=60
+            )
 
         logger.info(f"📥 API Response Status: {response.status_code}")
         
@@ -504,7 +504,7 @@ def call_cv_analysis_api(cv_data, review_type):
         try:
             result = response.json()
             logger.info(f"📊 API Response Keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
-            logger.info(f"📝 API Response Sample: {str(result)[:500]}")
+            logger.info(f"📝 First 200 chars of response: {str(result)[:200]}")
         except Exception as json_error:
             logger.error(f"Failed to parse API JSON response: {json_error}")
             logger.error(f"Raw response: {response.text[:500]}")
@@ -526,6 +526,7 @@ def call_cv_analysis_api(cv_data, review_type):
 
     except Exception as e:
         logger.error(f"Error calling CV analysis API: {str(e)}")
+        import traceback
         logger.error(f"Full error: {traceback.format_exc()}")
         return analyze_cv_fallback(cv_data, review_type)
 
@@ -539,14 +540,64 @@ def analyze_cv_fallback(cv_data, review_type):
 
 
 def process_basic_api_response(result):
-    """Process basic API response"""
+    """Process basic API response with better error handling"""
     insights = []
-    for section, details in result.get('section_feedback', {}).items():
-        if details.get('improvement_needed', False):
-            insights.append(f"{section.upper()}: {details.get('suggestion', '')}")
-
-    for suggestion in result.get('general_suggestions', []):
-        insights.append(suggestion)
+    
+    # Check if API returned an error
+    if result.get('error'):
+        logger.error(f"API Error: {result.get('error')}")
+        return {
+            'success': False,
+            'error': result.get('error')
+        }
+    
+    # Log the response structure for debugging
+    logger.info(f"API Response structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+    
+    # Extract insights from section feedback
+    section_feedback = result.get('section_feedback', {})
+    if section_feedback:
+        for section, details in section_feedback.items():
+            if isinstance(details, dict):
+                if details.get('improvement_needed', False):
+                    suggestion = details.get('suggestion', '') or details.get('feedback', '')
+                    if suggestion:
+                        insights.append(f"{section.upper()}: {suggestion}")
+            elif isinstance(details, str) and details:
+                # Handle case where details is just a string
+                insights.append(f"{section.upper()}: {details}")
+    
+    # Extract general suggestions
+    general_suggestions = result.get('general_suggestions', [])
+    if isinstance(general_suggestions, list):
+        for suggestion in general_suggestions:
+            if suggestion:
+                insights.append(suggestion)
+    
+    # Try alternative field names that the API might use
+    alternative_fields = ['feedback', 'suggestions', 'improvements', 'recommendations']
+    for field in alternative_fields:
+        if field in result and isinstance(result[field], list):
+            for item in result[field]:
+                if item and item not in insights:
+                    insights.append(item)
+    
+    # If still no insights, check for a general analysis or message field
+    if not insights:
+        if 'analysis' in result and result['analysis']:
+            insights.append(result['analysis'])
+        if 'message' in result and result['message']:
+            insights.append(result['message'])
+    
+    logger.info(f"📊 Extracted {len(insights)} insights from API response")
+    
+    # If no insights found, return failure so fallback is used
+    if not insights:
+        logger.warning("No insights found in API response, will use fallback")
+        return {
+            'success': False,
+            'error': 'No insights returned from API'
+        }
 
     return {
         'success': True,
@@ -557,26 +608,78 @@ def process_basic_api_response(result):
 
 
 def process_advanced_api_response(result):
-    """Process advanced API response"""
-    score = result.get('overall_score', 65)
+    """Process advanced API response with better error handling"""
+    # Check if API returned an error
+    if result.get('error'):
+        logger.error(f"API Error: {result.get('error')}")
+        return {
+            'success': False,
+            'error': result.get('error')
+        }
+    
+    # Log the response structure for debugging
+    logger.info(f"API Response structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+    
+    # Extract score (try different possible field names)
+    score = result.get('overall_score') or result.get('score') or result.get('cv_score') or 65
     section_scores = {}
 
-    for section, details in result.get('section_feedback', {}).items():
-        section_scores[section] = details.get('score', 50)
+    # Extract section scores
+    section_feedback = result.get('section_feedback', {})
+    if section_feedback:
+        for section, details in section_feedback.items():
+            if isinstance(details, dict):
+                section_scores[section] = details.get('score', 50)
 
+    # Extract insights
     insights = []
-    for section, details in result.get('section_feedback', {}).items():
-        insights.append(f"{section.upper()}: {details.get('suggestion', '')}")
-
+    
+    # From section feedback
+    if section_feedback:
+        for section, details in section_feedback.items():
+            if isinstance(details, dict):
+                suggestion = details.get('suggestion', '') or details.get('feedback', '')
+                if suggestion:
+                    insights.append(f"{section.upper()}: {suggestion}")
+            elif isinstance(details, str) and details:
+                insights.append(f"{section.upper()}: {details}")
+    
+    # Add keyword analysis if available
     if 'keyword_matches' in result:
-        insights.append(f"KEYWORDS: Your CV matches {result.get('keyword_match_percentage', 0)}% of the job keywords. Consider adding more relevant keywords.")
+        keyword_percentage = result.get('keyword_match_percentage', 0)
+        insights.append(f"KEYWORDS: Your CV matches {keyword_percentage}% of the job keywords. Consider adding more relevant keywords.")
+    elif 'keywords' in result:
+        insights.append(f"KEYWORDS: {result['keywords']}")
+    
+    # Try to get general suggestions
+    general_suggestions = result.get('general_suggestions', [])
+    if isinstance(general_suggestions, list):
+        insights.extend(general_suggestions)
+    
+    # Try alternative field names
+    alternative_fields = ['feedback', 'suggestions', 'improvements', 'recommendations']
+    for field in alternative_fields:
+        if field in result and isinstance(result[field], list):
+            for item in result[field]:
+                if item and item not in insights:
+                    insights.append(item)
+    
+    logger.info(f"📊 Extracted {len(insights)} insights from API response")
+    
+    # If no insights found, return failure so fallback is used
+    if not insights:
+        logger.warning("No insights found in API response, will use fallback")
+        return {
+            'success': False,
+            'error': 'No insights returned from API'
+        }
 
     return {
         'success': True,
         'timestamp': datetime.now().isoformat(),
         'improvement_score': score,
         'section_scores': section_scores,
-        'insights': insights,
+        'insights': insights[:10],  # Allow more insights for advanced review
         'api_provider': 'CV Analyzer API'
     }
 
