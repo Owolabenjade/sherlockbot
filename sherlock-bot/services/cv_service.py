@@ -540,54 +540,55 @@ def analyze_cv_fallback(cv_data, review_type):
 
 
 def process_basic_api_response(result):
-    """Process basic API response with better error handling"""
+    """Process basic API response with correct structure"""
     insights = []
     
     # Check if API returned an error
-    if result.get('error'):
-        logger.error(f"API Error: {result.get('error')}")
+    if result.get('error') or not result.get('success', True):
+        logger.error(f"API Error: {result.get('error', 'Unknown error')}")
         return {
             'success': False,
-            'error': result.get('error')
+            'error': result.get('error', 'API request failed')
         }
     
     # Log the response structure for debugging
     logger.info(f"API Response structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
     
-    # Extract insights from section feedback
-    section_feedback = result.get('section_feedback', {})
-    if section_feedback:
-        for section, details in section_feedback.items():
-            if isinstance(details, dict):
-                if details.get('improvement_needed', False):
-                    suggestion = details.get('suggestion', '') or details.get('feedback', '')
-                    if suggestion:
-                        insights.append(f"{section.upper()}: {suggestion}")
-            elif isinstance(details, str) and details:
-                # Handle case where details is just a string
-                insights.append(f"{section.upper()}: {details}")
+    # Extract insights from the nested structure
+    analysis_results = result.get('analysis_results', {})
+    if analysis_results:
+        ai_analysis = analysis_results.get('ai_analysis', {})
+        
+        # Get improvement suggestions
+        improvement_suggestions = ai_analysis.get('improvement_suggestions', [])
+        if isinstance(improvement_suggestions, list):
+            insights.extend(improvement_suggestions)
+        
+        # Get section-specific feedback if available
+        section_feedback = ai_analysis.get('section_feedback', {})
+        for section, feedback in section_feedback.items():
+            if isinstance(feedback, dict) and feedback.get('suggestion'):
+                insights.append(f"{section.upper()}: {feedback['suggestion']}")
+            elif isinstance(feedback, str) and feedback:
+                insights.append(f"{section.upper()}: {feedback}")
+        
+        # Add ATS compatibility insight if available
+        ats_score = ai_analysis.get('ats_compatibility', 0)
+        if ats_score:
+            insights.append(f"ATS COMPATIBILITY: Your CV scores {ats_score}% for applicant tracking systems. Aim for 80%+ by including more relevant keywords.")
     
-    # Extract general suggestions
-    general_suggestions = result.get('general_suggestions', [])
-    if isinstance(general_suggestions, list):
-        for suggestion in general_suggestions:
-            if suggestion:
-                insights.append(suggestion)
-    
-    # Try alternative field names that the API might use
-    alternative_fields = ['feedback', 'suggestions', 'improvements', 'recommendations']
-    for field in alternative_fields:
-        if field in result and isinstance(result[field], list):
-            for item in result[field]:
-                if item and item not in insights:
-                    insights.append(item)
-    
-    # If still no insights, check for a general analysis or message field
+    # Try the old structure as fallback
     if not insights:
-        if 'analysis' in result and result['analysis']:
-            insights.append(result['analysis'])
-        if 'message' in result and result['message']:
-            insights.append(result['message'])
+        section_feedback = result.get('section_feedback', {})
+        for section, details in section_feedback.items():
+            if details.get('improvement_needed', False):
+                insights.append(f"{section.upper()}: {details.get('suggestion', '')}")
+
+        for suggestion in result.get('general_suggestions', []):
+            insights.append(suggestion)
+    
+    # Don't include the generic success message
+    insights = [i for i in insights if i and "successfully" not in i.lower()]
     
     logger.info(f"📊 Extracted {len(insights)} insights from API response")
     
@@ -608,61 +609,66 @@ def process_basic_api_response(result):
 
 
 def process_advanced_api_response(result):
-    """Process advanced API response with better error handling"""
+    """Process advanced API response with correct structure"""
     # Check if API returned an error
-    if result.get('error'):
-        logger.error(f"API Error: {result.get('error')}")
+    if result.get('error') or not result.get('success', True):
+        logger.error(f"API Error: {result.get('error', 'Unknown error')}")
         return {
             'success': False,
-            'error': result.get('error')
+            'error': result.get('error', 'API request failed')
         }
     
     # Log the response structure for debugging
     logger.info(f"API Response structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
     
-    # Extract score (try different possible field names)
-    score = result.get('overall_score') or result.get('score') or result.get('cv_score') or 65
-    section_scores = {}
-
-    # Extract section scores
-    section_feedback = result.get('section_feedback', {})
-    if section_feedback:
-        for section, details in section_feedback.items():
-            if isinstance(details, dict):
-                section_scores[section] = details.get('score', 50)
-
-    # Extract insights
     insights = []
+    score = 65  # Default score
+    section_scores = {}
     
-    # From section feedback
-    if section_feedback:
-        for section, details in section_feedback.items():
-            if isinstance(details, dict):
-                suggestion = details.get('suggestion', '') or details.get('feedback', '')
+    # Extract from nested structure
+    analysis_results = result.get('analysis_results', {})
+    if analysis_results:
+        ai_analysis = analysis_results.get('ai_analysis', {})
+        
+        # Get overall score
+        score = ai_analysis.get('overall_score') or ai_analysis.get('ats_compatibility', 65)
+        
+        # Get improvement suggestions
+        improvement_suggestions = ai_analysis.get('improvement_suggestions', [])
+        if isinstance(improvement_suggestions, list):
+            insights.extend(improvement_suggestions)
+        
+        # Get section scores and feedback
+        section_feedback = ai_analysis.get('section_feedback', {})
+        for section, feedback in section_feedback.items():
+            if isinstance(feedback, dict):
+                section_scores[section] = feedback.get('score', 50)
+                suggestion = feedback.get('suggestion', '')
                 if suggestion:
                     insights.append(f"{section.upper()}: {suggestion}")
-            elif isinstance(details, str) and details:
-                insights.append(f"{section.upper()}: {details}")
+            elif isinstance(feedback, str) and feedback:
+                insights.append(f"{section.upper()}: {feedback}")
+        
+        # Add keyword analysis
+        keyword_data = ai_analysis.get('keyword_analysis', {})
+        if keyword_data:
+            match_percentage = keyword_data.get('match_percentage', 0)
+            insights.append(f"KEYWORDS: Your CV matches {match_percentage}% of industry keywords. Consider adding more relevant terms.")
     
-    # Add keyword analysis if available
-    if 'keyword_matches' in result:
-        keyword_percentage = result.get('keyword_match_percentage', 0)
-        insights.append(f"KEYWORDS: Your CV matches {keyword_percentage}% of the job keywords. Consider adding more relevant keywords.")
-    elif 'keywords' in result:
-        insights.append(f"KEYWORDS: {result['keywords']}")
+    # Try old structure as fallback
+    if not insights:
+        score = result.get('overall_score', 65)
+        
+        section_feedback = result.get('section_feedback', {})
+        for section, details in section_feedback.items():
+            section_scores[section] = details.get('score', 50)
+            insights.append(f"{section.upper()}: {details.get('suggestion', '')}")
+
+        if 'keyword_matches' in result:
+            insights.append(f"KEYWORDS: Your CV matches {result.get('keyword_match_percentage', 0)}% of the job keywords.")
     
-    # Try to get general suggestions
-    general_suggestions = result.get('general_suggestions', [])
-    if isinstance(general_suggestions, list):
-        insights.extend(general_suggestions)
-    
-    # Try alternative field names
-    alternative_fields = ['feedback', 'suggestions', 'improvements', 'recommendations']
-    for field in alternative_fields:
-        if field in result and isinstance(result[field], list):
-            for item in result[field]:
-                if item and item not in insights:
-                    insights.append(item)
+    # Filter out generic messages
+    insights = [i for i in insights if i and "successfully" not in i.lower()]
     
     logger.info(f"📊 Extracted {len(insights)} insights from API response")
     
@@ -679,7 +685,7 @@ def process_advanced_api_response(result):
         'timestamp': datetime.now().isoformat(),
         'improvement_score': score,
         'section_scores': section_scores,
-        'insights': insights[:10],  # Allow more insights for advanced review
+        'insights': insights[:10],
         'api_provider': 'CV Analyzer API'
     }
 
