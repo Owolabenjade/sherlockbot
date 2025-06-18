@@ -272,14 +272,14 @@ def identify_sections(text):
     """Identify CV sections"""
     sections = {}
     section_patterns = {
-        'summary': r'(?i)(profile|summary|objective|about\s*me)',
-        'experience': r'(?i)(experience|employment|work\s*history|professional\s*background)',
-        'education': r'(?i)(education|qualification|academic|degree|university)',
-        'skills': r'(?i)(skills|expertise|competencies|proficiencies|technical)',
-        'projects': r'(?i)(projects|portfolio|works)',
-        'certifications': r'(?i)(certifications|certificates|credentials)',
-        'languages': r'(?i)(languages|language\s*proficiency)',
-        'interests': r'(?i)(interests|hobbies|activities)'
+        'summary': r'(profile|summary|objective|about\s*me)',
+        'experience': r'(experience|employment|work\s*history|professional\s*background)',
+        'education': r'(education|qualification|academic|degree|university)',
+        'skills': r'(skills|expertise|competencies|proficiencies|technical)',
+        'projects': r'(projects|portfolio|works)',
+        'certifications': r'(certifications|certificates|credentials)',
+        'languages': r'(languages|language\s*proficiency)',
+        'interests': r'(interests|hobbies|activities)'
     }
 
     lines = text.split('\n')
@@ -293,6 +293,7 @@ def identify_sections(text):
 
         found_section = None
         for section_name, pattern in section_patterns.items():
+            # Fixed: Remove (?i) from pattern since we're using re.IGNORECASE flag
             if re.search(f"^{pattern}.*$", line, re.IGNORECASE):
                 found_section = section_name
                 break
