@@ -1,8 +1,9 @@
-# controllers/webhook_controller.py - Cloud Link Workaround Version
+# controllers/webhook_controller.py - Cloud Link Workaround Version - FIXED
 import os
 import time
 import traceback
 import re
+from datetime import datetime
 from flask import request
 from twilio.twiml.messaging_response import MessagingResponse
 from services.firebase_service import get_user_session, update_user_session, get_user_email
@@ -299,10 +300,15 @@ def handle_email_state(resp, session, sender, message_body):
 
 
 def handle_completed_state(resp, session, sender, message_body):
-    """Handle completed state"""
+    """Handle completed state - prevent duplicate processing"""
     if message_body.lower() in ['start', 'restart', 'again', 'new']:
-        # Start new review
-        session['state'] = STATES['WELCOME']
+        # Start new review - Reset session completely
+        session = {
+            'phone_number': sender,
+            'state': STATES['WELCOME'],
+            'created_at': datetime.now().isoformat(),
+            'last_activity': datetime.now().isoformat()
+        }
         update_user_session(sender, session)
         handle_welcome_state(resp, session, sender, 'start')
     else:
@@ -330,16 +336,17 @@ def process_cv_async(sender, session, review_type, email=None):
         result = process_cv_upload(cv_cloud_link, review_type, sender, email)
         
         if result.get('success'):
-            # Update session
-            session['state'] = STATES['COMPLETED']
-            session['last_review'] = result
-            update_user_session(sender, session)
-            
-            # Send results
+            # Send results FIRST, then update session
             if review_type == 'basic':
                 send_basic_review_results(sender, result)
             else:
                 send_advanced_review_results(sender, result)
+            
+            # Update session AFTER sending results
+            session['state'] = STATES['COMPLETED']
+            session['last_review'] = result
+            update_user_session(sender, session)
+            
         else:
             error_msg = result.get('error', 'Unknown error occurred')
             send_whatsapp_message(sender, f"❌ Error processing your CV: {error_msg}\n\nPlease try again or contact support.")
@@ -358,7 +365,7 @@ def process_cv_async(sender, session, review_type, email=None):
 
 
 def send_basic_review_results(sender, result):
-    """Send basic review results via WhatsApp"""
+    """Send basic review results via WhatsApp - FIXED"""
     insights = result.get('insights', [])
     
     # Format insights
@@ -377,11 +384,15 @@ Here are your key improvement areas:
 
 Type 'start' to review another CV or upgrade to Advanced Review for a comprehensive analysis with a professional PDF report."""
     
-    send_whatsapp_message(sender, message)
+    # Send the message
+    send_result = send_whatsapp_message(sender, message)
+    logger.info(f"✅ Basic review results sent to {sender}")
+    
+    return send_result
 
 
 def send_advanced_review_results(sender, result):
-    """Send advanced review results via WhatsApp"""
+    """Send advanced review results via WhatsApp - FIXED"""
     score = result.get('improvement_score', 0)
     download_link = result.get('download_link', '')
     insights = result.get('insights', [])
@@ -412,4 +423,8 @@ Your comprehensive PDF report includes:
 
 Type 'start' to review another CV."""
     
-    send_whatsapp_message(sender, message)
+    # Send the message
+    send_result = send_whatsapp_message(sender, message)
+    logger.info(f"✅ Advanced review results sent to {sender}")
+    
+    return send_result
