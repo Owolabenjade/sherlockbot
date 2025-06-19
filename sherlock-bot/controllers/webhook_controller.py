@@ -365,66 +365,96 @@ def process_cv_async(sender, session, review_type, email=None):
 
 
 def send_basic_review_results(sender, result):
-    """Send basic review results via WhatsApp - FIXED"""
+    """Send basic review results via WhatsApp - FIXED with character limit handling"""
     insights = result.get('insights', [])
     
-    # Format insights
-    insights_text = "\n\n".join([f"• {insight}" for insight in insights[:5]])
+    # Send results in multiple messages to avoid character limit
+    # Message 1: Header and top insights
+    top_insights = insights[:3] if insights else []
+    insights_text = "\n".join([f"• {insight[:120]}..." if len(insight) > 120 else f"• {insight}" for insight in top_insights])
     
-    message = f"""✅ **Basic CV Review Complete!**
+    message1 = f"""✅ **Basic CV Review Complete!**
 
-Here are your key improvement areas:
+🔍 **Top Improvement Areas:**
 
-{insights_text}
+{insights_text}"""
+    
+    # Send first message
+    send_result1 = send_whatsapp_message(sender, message1)
+    
+    # Message 2: Additional insights (if any) and next steps
+    if len(insights) > 3:
+        additional_insights = insights[3:5]  # Get up to 2 more insights
+        additional_text = "\n".join([f"• {insight[:120]}..." if len(insight) > 120 else f"• {insight}" for insight in additional_insights])
+        
+        message2 = f"""🔍 **Additional Recommendations:**
+
+{additional_text}
 
 💡 **Next Steps:**
 1. Update your CV based on these suggestions
-2. Consider our Advanced Review for a detailed analysis
+2. Consider our Advanced Review for detailed analysis
 3. Tailor your CV for each job application
 
-Type 'start' to review another CV or upgrade to Advanced Review for a comprehensive analysis with a professional PDF report."""
+Type 'start' to review another CV!"""
+    else:
+        message2 = """💡 **Next Steps:**
+1. Update your CV based on these suggestions
+2. Consider our Advanced Review for detailed analysis
+3. Tailor your CV for each job application
+
+Type 'start' to review another CV or upgrade to Advanced Review for comprehensive analysis with a professional PDF report!"""
     
-    # Send the message
-    send_result = send_whatsapp_message(sender, message)
-    logger.info(f"✅ Basic review results sent to {sender}")
+    # Send second message
+    send_result2 = send_whatsapp_message(sender, message2)
     
-    return send_result
+    logger.info(f"✅ Basic review results sent to {sender} in 2 messages")
+    
+    # Return success if at least one message was sent
+    return send_result1 if send_result1.get('success') else send_result2
 
 
 def send_advanced_review_results(sender, result):
-    """Send advanced review results via WhatsApp - FIXED"""
+    """Send advanced review results via WhatsApp - FIXED with character limit handling"""
     score = result.get('improvement_score', 0)
     download_link = result.get('download_link', '')
     insights = result.get('insights', [])
     
-    # Format top insights
-    top_insights = "\n".join([f"• {insight}" for insight in insights[:3]])
+    # Message 1: Score and top insights
+    top_insights = insights[:2] if insights else []
+    top_insights_text = "\n".join([f"• {insight[:100]}..." if len(insight) > 100 else f"• {insight}" for insight in top_insights])
     
-    message = f"""🎉 **Advanced CV Review Complete!**
+    message1 = f"""🎉 **Advanced CV Review Complete!**
 
 📊 **Your CV Score: {score}/100**
 
 🔍 **Top Findings:**
-{top_insights}
+{top_insights_text}
 
 📄 **Download Your Full Report:**
-{download_link}
-
-Your comprehensive PDF report includes:
-✅ Detailed section-by-section analysis
-✅ ATS optimization recommendations
+{download_link}"""
+    
+    # Send first message
+    send_result1 = send_whatsapp_message(sender, message1)
+    
+    # Message 2: Report details and next steps
+    message2 = f"""📋 **Your Report Includes:**
+✅ Section-by-section analysis
+✅ ATS optimization tips
 ✅ Industry-specific improvements
-✅ Formatting and design tips
-✅ Keyword optimization suggestions
+✅ Formatting recommendations
+✅ Keyword optimization
 
-💡 The report link will be active for 24 hours. {
-'We have also sent it to your email.' if result.get('email_sent') else 'Save it for future reference.'
+💡 Report link active for 24 hours. {
+'Also sent to your email!' if result.get('email_sent') else 'Save for reference!'
 }
 
-Type 'start' to review another CV."""
+Type 'start' to review another CV!"""
     
-    # Send the message
-    send_result = send_whatsapp_message(sender, message)
-    logger.info(f"✅ Advanced review results sent to {sender}")
+    # Send second message
+    send_result2 = send_whatsapp_message(sender, message2)
     
-    return send_result
+    logger.info(f"✅ Advanced review results sent to {sender} in 2 messages")
+    
+    # Return success if at least one message was sent
+    return send_result1 if send_result1.get('success') else send_result2
