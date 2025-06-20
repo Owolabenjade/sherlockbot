@@ -316,7 +316,7 @@ def handle_completed_state(resp, session, sender, message_body):
 
 
 def process_cv_async(sender, session, review_type, email=None):
-    """Process CV review asynchronously - Cloud link version"""
+    """Process CV review asynchronously - FIXED to prevent duplicate messages"""
     try:
         # Get CV cloud link from session
         cv_cloud_link = session.get('cv_cloud_link')
@@ -328,24 +328,22 @@ def process_cv_async(sender, session, review_type, email=None):
             return
         
         # Process the CV using the cloud link directly
-        # The new cv_controller.py handles both cloud links and storage paths
         logger.info(f"Processing CV from cloud link: {cv_cloud_link}")
         
         # Pass the cloud link directly to process_cv_upload
-        # The new cv_controller will handle downloading and processing
         result = process_cv_upload(cv_cloud_link, review_type, sender, email)
         
         if result.get('success'):
-            # Send results FIRST, then update session
+            # Update session state to COMPLETED FIRST to prevent duplicate processing messages
+            session['state'] = STATES['COMPLETED']
+            session['last_review'] = result
+            update_user_session(sender, session)
+            
+            # THEN send results (this order is crucial)
             if review_type == 'basic':
                 send_basic_review_results(sender, result)
             else:
                 send_advanced_review_results(sender, result)
-            
-            # Update session AFTER sending results
-            session['state'] = STATES['COMPLETED']
-            session['last_review'] = result
-            update_user_session(sender, session)
             
         else:
             error_msg = result.get('error', 'Unknown error occurred')
@@ -365,53 +363,59 @@ def process_cv_async(sender, session, review_type, email=None):
 
 
 def send_basic_review_results(sender, result):
-    """Send basic review results via WhatsApp - FIXED with character limit handling"""
+    """Send basic review results via WhatsApp - COMPLETE insights in multiple messages"""
     insights = result.get('insights', [])
     
-    # Send results in multiple messages to avoid character limit
-    # Message 1: Header and top insights
-    top_insights = insights[:3] if insights else []
-    insights_text = "\n".join([f"• {insight[:120]}..." if len(insight) > 120 else f"• {insight}" for insight in top_insights])
+    # Send complete insights across multiple messages
+    messages_sent = 0
     
-    message1 = f"""✅ **Basic CV Review Complete!**
-
-🔍 **Top Improvement Areas:**
-
-{insights_text}"""
-    
-    # Send first message
-    send_result1 = send_whatsapp_message(sender, message1)
-    
-    # Message 2: Additional insights (if any) and next steps
-    if len(insights) > 3:
-        additional_insights = insights[3:5]  # Get up to 2 more insights
-        additional_text = "\n".join([f"• {insight[:120]}..." if len(insight) > 120 else f"• {insight}" for insight in additional_insights])
+    # Message 1: Header + First 2 complete insights
+    if insights:
+        message1 = "✅ **Basic CV Review Complete!**\n\n🔍 **Key Improvement Areas:**"
         
-        message2 = f"""🔍 **Additional Recommendations:**
-
-{additional_text}
-
-💡 **Next Steps:**
-1. Update your CV based on these suggestions
-2. Consider our Advanced Review for detailed analysis
-3. Tailor your CV for each job application
-
-Type 'start' to review another CV!"""
-    else:
-        message2 = """💡 **Next Steps:**
+        # Add first 2 insights completely (no truncation)
+        for i, insight in enumerate(insights[:2]):
+            message1 += f"\n\n• **{insight.split(':')[0] if ':' in insight else f'Tip {i+1}'}:** {insight.split(':', 1)[1].strip() if ':' in insight else insight}"
+        
+        if send_whatsapp_message(sender, message1).get('success'):
+            messages_sent += 1
+    
+    # Message 2: Next 2-3 insights
+    if len(insights) > 2:
+        remaining_insights = insights[2:]
+        message2 = "🔍 **Additional Recommendations:**"
+        
+        for i, insight in enumerate(remaining_insights[:3]):
+            message2 += f"\n\n• **{insight.split(':')[0] if ':' in insight else f'Tip {i+3}'}:** {insight.split(':', 1)[1].strip() if ':' in insight else insight}"
+        
+        if send_whatsapp_message(sender, message2).get('success'):
+            messages_sent += 1
+    
+    # Message 3: Any remaining insights (if more than 5 total)
+    if len(insights) > 5:
+        final_insights = insights[5:]
+        message3 = "🔍 **Final Recommendations:**"
+        
+        for i, insight in enumerate(final_insights[:3]):
+            message3 += f"\n\n• **{insight.split(':')[0] if ':' in insight else f'Additional Tip {i+1}'}:** {insight.split(':', 1)[1].strip() if ':' in insight else insight}"
+        
+        if send_whatsapp_message(sender, message3).get('success'):
+            messages_sent += 1
+    
+    # Final message: Next steps
+    final_message = """💡 **Next Steps:**
 1. Update your CV based on these suggestions
 2. Consider our Advanced Review for detailed analysis
 3. Tailor your CV for each job application
 
 Type 'start' to review another CV or upgrade to Advanced Review for comprehensive analysis with a professional PDF report!"""
     
-    # Send second message
-    send_result2 = send_whatsapp_message(sender, message2)
+    if send_whatsapp_message(sender, final_message).get('success'):
+        messages_sent += 1
     
-    logger.info(f"✅ Basic review results sent to {sender} in 2 messages")
+    logger.info(f"✅ Basic review results sent to {sender} in {messages_sent} messages")
     
-    # Return success if at least one message was sent
-    return send_result1 if send_result1.get('success') else send_result2
+    return {'success': messages_sent > 0}
 
 
 def send_advanced_review_results(sender, result):
