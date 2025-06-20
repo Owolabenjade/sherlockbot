@@ -1,5 +1,6 @@
 # app.py - Main Flask application with immediate initialization for Cloud Functions
 import os
+import sys
 import traceback
 from flask import Flask, request, jsonify
 
@@ -191,15 +192,51 @@ def handle_exception(e):
 # Log that the app module has loaded
 logger.info("🚀 App module loaded, routes should be registered")
 
-# IMPORTANT: Only run the server if this file is executed directly
-# This prevents the server from starting during Cloud Functions deployment
-if __name__ == '__main__' and os.getenv('FIREBASE_CONFIG') is None:
-    # Extra check to ensure we're not in a Cloud Function environment
-    if not os.getenv('K_SERVICE') and not os.getenv('FUNCTION_TARGET'):
+# CRITICAL FIX: Multiple checks to prevent Flask server from starting during deployment
+def should_start_server():
+    """Determine if we should start the Flask development server"""
+    
+    # Don't start if we're in Cloud Functions
+    if os.getenv('K_SERVICE') or os.getenv('FUNCTION_TARGET'):
+        logger.info("🚫 Cloud Functions environment detected - not starting Flask server")
+        return False
+    
+    # Don't start if Firebase Functions is deploying
+    if os.getenv('FIREBASE_CONFIG'):
+        logger.info("🚫 Firebase deployment detected - not starting Flask server")
+        return False
+    
+    # Don't start if we're being imported (not run directly)
+    if __name__ != '__main__':
+        logger.info("🚫 Module imported, not executed directly - not starting Flask server")
+        return False
+    
+    # Don't start if we detect deployment-related arguments
+    deployment_indicators = ['gunicorn', 'uwsgi', 'firebase', 'gcloud', 'functions-framework']
+    for arg in sys.argv:
+        if any(indicator in arg.lower() for indicator in deployment_indicators):
+            logger.info(f"🚫 Deployment indicator found in args: {arg} - not starting Flask server")
+            return False
+    
+    # Don't start if we're in a CI/CD environment
+    ci_indicators = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI']
+    if any(os.getenv(indicator) for indicator in ci_indicators):
+        logger.info("🚫 CI/CD environment detected - not starting Flask server")
+        return False
+    
+    # All checks passed - safe to start server
+    logger.info("✅ Safe to start Flask development server")
+    return True
+
+# Only start the Flask development server if all conditions are met
+if should_start_server():
+    try:
         port = int(os.getenv('PORT', 8080))
         debug = os.getenv('FLASK_ENV') != 'production'
         
-        logger.info(f"🚀 Starting Sherlock Bot on port {port}")
+        logger.info(f"🚀 Starting Sherlock Bot development server on port {port}")
         app.run(host='0.0.0.0', port=port, debug=debug)
-    else:
-        logger.info("Detected Cloud Function environment, not starting Flask server")
+    except Exception as e:
+        logger.error(f"❌ Error starting Flask server: {str(e)}")
+else:
+    logger.info("📱 App configured for Cloud Functions - ready for deployment")
