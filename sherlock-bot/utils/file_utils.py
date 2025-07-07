@@ -38,10 +38,10 @@ def get_file_extension(content_type):
 
 def save_temp_file(media_url, extension):
     """
-    Download file from Twilio Media URL
+    Download file from WhatsApp Media URL
     
     Args:
-        media_url (str): Twilio media URL
+        media_url (str): WhatsApp media URL
         extension (str): File extension
         
     Returns:

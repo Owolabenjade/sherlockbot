@@ -75,7 +75,11 @@ def handle_whatsapp_message(request):
             handle_email_state(resp, session, sender, message_body)
             
         elif current_state == STATES['PROCESSING']:
-            resp.message("⏳ Your CV review is still being processed. Please wait a moment...")
+            # Don't send duplicate processing messages
+            # Just acknowledge without repeating the processing message
+            logger.info(f"User {sender} sent message while processing - ignoring to prevent duplicates")
+            # Return empty response to avoid duplicate messages
+            return str(resp)
             
         elif current_state == STATES['COMPLETED']:
             handle_completed_state(resp, session, sender, message_body)
@@ -149,7 +153,7 @@ def handle_awaiting_cv_state(resp, session, sender, message_body, num_media, req
             # Download the file
             resp.message("📥 Receiving your CV... Please wait a moment.")
             
-            # Download file from Twilio
+            # Download file from WhatsApp
             local_file_path = save_temp_file(media_url, file_extension)
             logger.info(f"✅ CV downloaded to: {local_file_path}")
             
@@ -192,7 +196,7 @@ Reply with '1' for Basic Review or '2' for Advanced Review."""
             
         except Exception as e:
             logger.error(f"Error processing CV file: {str(e)}")
-            resp.message("❌ Sorry, I couldn't process your CV file. Please make sure it's a valid PDF or Word document and try again.")
+            resp.message("❌ Sorry, I couldn't process your CV file. Please make sure it's a valid PDF or Word document (max 16MB) and try again. If the issue persists, contact support.")
             
     else:
         # No file attached
