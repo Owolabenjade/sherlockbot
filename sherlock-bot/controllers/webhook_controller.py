@@ -1,12 +1,11 @@
-# controllers/webhook_controller.py - Cloud Link Workaround Version - FIXED
+# controllers/webhook_controller.py - Production WhatsApp with Direct File Upload
 import os
 import time
 import traceback
-import re
 from datetime import datetime
 from flask import request
 from twilio.twiml.messaging_response import MessagingResponse
-from services.firebase_service import get_user_session, update_user_session, get_user_email
+from services.firebase_service import get_user_session, update_user_session, upload_cv_to_storage
 from services.twilio_service import send_whatsapp_message
 from controllers.cv_controller import process_cv_upload
 from controllers.payment_controller import create_payment_link
@@ -31,7 +30,7 @@ STATES = {
 
 def handle_whatsapp_message(request):
     """
-    Process incoming WhatsApp message with cloud link workflow
+    Process incoming WhatsApp message with direct file upload
     
     Args:
         request: Flask request object
@@ -39,7 +38,7 @@ def handle_whatsapp_message(request):
     Returns:
         Response: TwiML response
     """
-    logger.info("🚀 Starting handle_whatsapp_message function")
+    logger.info("🚀 Starting production WhatsApp message handler")
     
     try:
         # Extract message data
@@ -64,7 +63,7 @@ def handle_whatsapp_message(request):
             handle_welcome_state(resp, session, sender, message_body)
             
         elif current_state == STATES['AWAITING_CV']:
-            handle_awaiting_cv_state(resp, session, sender, message_body, num_media)
+            handle_awaiting_cv_state(resp, session, sender, message_body, num_media, request)
             
         elif current_state == STATES['AWAITING_REVIEW_TYPE']:
             handle_review_type_state(resp, session, sender, message_body)
@@ -103,17 +102,17 @@ def handle_welcome_state(resp, session, sender, message_body):
     """Handle the welcome state"""
     # Check for restart keywords
     if message_body.lower() in ['start', 'restart', 'begin', 'hello', 'hi']:
-        welcome_msg = """🔍 Welcome to Sherlock Bot CV Review Service! 🔍
+        welcome_msg = """🔍 **Welcome to Sherlock CV Review!** 🔍
 
 I'm here to help you improve your CV and increase your chances of landing your dream job.
 
-📋 Our Services:
+📋 **Our Services:**
 • **Basic Review (FREE)**: Get quick insights and key improvement areas
 • **Advanced Review (₦5,000)**: Comprehensive analysis with detailed PDF report
 
-To get started, please upload your CV to a cloud service (Google Drive, Dropbox, OneDrive, etc.) and share the link with me.
+📎 **To get started, simply send me your CV file** (PDF or Word document).
 
-💡 Make sure the link has view access enabled!"""
+Ready? Just attach your CV and send it to me!"""
         
         resp.message(welcome_msg)
         
@@ -125,33 +124,51 @@ To get started, please upload your CV to a cloud service (Google Drive, Dropbox,
         resp.message("👋 Hello! Type 'start' to begin your CV review journey.")
 
 
-def handle_awaiting_cv_state(resp, session, sender, message_body, num_media):
-    """Handle CV upload state - Cloud link version"""
-    # Check if user sent a link
-    cloud_link_pattern = r'https?://(?:www\.)?(?:drive\.google\.com|dropbox\.com|onedrive\.live\.com|docs\.google\.com|drive\.dropbox\.com|1drv\.ms|bit\.ly|tinyurl\.com|short\.link)[\S]+'
+def handle_awaiting_cv_state(resp, session, sender, message_body, num_media, request):
+    """Handle CV upload state - Direct file upload only"""
     
-    # Check for cloud storage links
-    cloud_links = re.findall(cloud_link_pattern, message_body)
-    
-    if cloud_links:
-        # User provided a cloud link
-        cloud_link = cloud_links[0]  # Take the first link
-        logger.info(f"📄 Cloud link detected: {cloud_link[:50]}...")
+    if num_media > 0:
+        # User sent a file attachment
+        logger.info(f"📄 User sent {num_media} file(s)")
         
         try:
-            # Download the file from cloud link
-            logger.info("Attempting to download CV from cloud link")
+            # Get the first media attachment
+            media_url = request.form.get('MediaUrl0')
+            media_content_type = request.form.get('MediaContentType0', '')
             
-            # For now, we'll simulate successful processing
-            # In production, you'd implement actual cloud download logic
+            logger.info(f"📎 Media URL: {media_url}")
+            logger.info(f"📎 Content Type: {media_content_type}")
             
-            # Store the cloud link in session
-            session['cv_cloud_link'] = cloud_link
+            # Check if it's a supported file type
+            file_extension = get_file_extension(media_content_type)
+            
+            if file_extension not in ['pdf', 'docx', 'doc']:
+                resp.message("❌ Please send a PDF or Word document (DOC/DOCX). Other file types are not supported.")
+                return
+            
+            # Download the file
+            resp.message("📥 Receiving your CV... Please wait a moment.")
+            
+            # Download file from Twilio
+            local_file_path = save_temp_file(media_url, file_extension)
+            logger.info(f"✅ CV downloaded to: {local_file_path}")
+            
+            # Upload to Firebase Storage
+            storage_path = upload_cv_to_storage(local_file_path, sender)
+            logger.info(f"☁️ CV uploaded to Firebase: {storage_path}")
+            
+            # Store in session
+            session['cv_storage_path'] = storage_path
+            session['cv_file_name'] = f"cv.{file_extension}"
             session['state'] = STATES['AWAITING_REVIEW_TYPE']
             update_user_session(sender, session)
             
+            # Clean up local file
+            if os.path.exists(local_file_path):
+                os.remove(local_file_path)
+            
             # Ask for review type
-            review_type_msg = """✅ CV link received successfully!
+            review_type_msg = """✅ **CV received successfully!**
 
 Now, please choose your review type:
 
@@ -171,25 +188,20 @@ Now, please choose your review type:
 Reply with '1' for Basic Review or '2' for Advanced Review."""
             
             resp.message(review_type_msg)
-            logger.info("✅ CV cloud link processed successfully")
+            logger.info("✅ CV processed successfully")
             
         except Exception as e:
-            logger.error(f"Error processing cloud link: {str(e)}")
-            resp.message("❌ Sorry, I couldn't access your CV from the provided link. Please make sure the link has public view access and try again.")
+            logger.error(f"Error processing CV file: {str(e)}")
+            resp.message("❌ Sorry, I couldn't process your CV file. Please make sure it's a valid PDF or Word document and try again.")
             
-    elif num_media > 0:
-        # User tried to attach file directly
-        resp.message("📎 Please upload your CV to a cloud service (Google Drive, Dropbox, etc.) and share the link with me. Make sure the link has view access enabled!")
-        
     else:
-        # Check if user wants to restart
+        # No file attached
         if message_body.lower() in ['restart', 'start over', 'cancel']:
             session['state'] = STATES['WELCOME']
             update_user_session(sender, session)
             resp.message("🔄 Restarting... Type 'start' to begin again.")
         else:
-            # No link found in message
-            resp.message("🔗 Please share a link to your CV from Google Drive, Dropbox, or another cloud service. Make sure the link has view access enabled!")
+            resp.message("📎 Please send your CV as an attachment. Simply attach your PDF or Word document and send it to me!")
 
 
 def handle_review_type_state(resp, session, sender, message_body):
@@ -221,13 +233,13 @@ def handle_review_type_state(resp, session, sender, message_body):
         )
         
         if payment_link:
-            payment_msg = f"""💳 Advanced Review Selected (₦5,000)
+            payment_msg = f"""💳 **Advanced Review Selected (₦5,000)**
 
 Please complete your payment to proceed:
 
-🔗 Payment Link: {payment_link}
+🔗 **Payment Link**: {payment_link}
 
-✅ After payment, you'll receive:
+✅ **After payment, you'll receive:**
 • Comprehensive CV analysis
 • Professional PDF report
 • Personalized improvement plan
@@ -300,7 +312,7 @@ def handle_email_state(resp, session, sender, message_body):
 
 
 def handle_completed_state(resp, session, sender, message_body):
-    """Handle completed state - prevent duplicate processing"""
+    """Handle completed state"""
     if message_body.lower() in ['start', 'restart', 'again', 'new']:
         # Start new review - Reset session completely
         session = {
@@ -316,30 +328,30 @@ def handle_completed_state(resp, session, sender, message_body):
 
 
 def process_cv_async(sender, session, review_type, email=None):
-    """Process CV review asynchronously - FIXED to prevent duplicate messages"""
+    """Process CV review asynchronously"""
     try:
-        # Get CV cloud link from session
-        cv_cloud_link = session.get('cv_cloud_link')
+        # Get CV storage path from session
+        cv_storage_path = session.get('cv_storage_path')
         
-        if not cv_cloud_link:
-            send_whatsapp_message(sender, "❌ Error: CV link not found. Please start over by typing 'start'.")
+        if not cv_storage_path:
+            send_whatsapp_message(sender, "❌ Error: CV file not found. Please start over by typing 'start'.")
             session['state'] = STATES['WELCOME']
             update_user_session(sender, session)
             return
         
-        # Process the CV using the cloud link directly
-        logger.info(f"Processing CV from cloud link: {cv_cloud_link}")
+        # Process the CV
+        logger.info(f"Processing CV from storage: {cv_storage_path}")
         
-        # Pass the cloud link directly to process_cv_upload
-        result = process_cv_upload(cv_cloud_link, review_type, sender, email)
+        # Process CV using storage path
+        result = process_cv_upload(cv_storage_path, review_type, sender, email)
         
         if result.get('success'):
-            # Update session state to COMPLETED FIRST to prevent duplicate processing messages
+            # Update session state to COMPLETED FIRST
             session['state'] = STATES['COMPLETED']
             session['last_review'] = result
             update_user_session(sender, session)
             
-            # THEN send results (this order is crucial)
+            # Send results
             if review_type == 'basic':
                 send_basic_review_results(sender, result)
             else:
@@ -363,43 +375,31 @@ def process_cv_async(sender, session, review_type, email=None):
 
 
 def send_basic_review_results(sender, result):
-    """Send basic review results via WhatsApp - COMPLETE insights in multiple messages"""
+    """Send basic review results via WhatsApp"""
     insights = result.get('insights', [])
     
     # Send complete insights across multiple messages
     messages_sent = 0
     
-    # Message 1: Header + First 2 complete insights
+    # Message 1: Header + First 2-3 insights
     if insights:
         message1 = "✅ **Basic CV Review Complete!**\n\n🔍 **Key Improvement Areas:**"
         
-        # Add first 2 insights completely (no truncation)
-        for i, insight in enumerate(insights[:2]):
-            message1 += f"\n\n• **{insight.split(':')[0] if ':' in insight else f'Tip {i+1}'}:** {insight.split(':', 1)[1].strip() if ':' in insight else insight}"
+        # Add first 3 insights
+        for i, insight in enumerate(insights[:3]):
+            message1 += f"\n\n{i+1}. {insight}"
         
         if send_whatsapp_message(sender, message1).get('success'):
             messages_sent += 1
     
-    # Message 2: Next 2-3 insights
-    if len(insights) > 2:
-        remaining_insights = insights[2:]
+    # Message 2: Remaining insights
+    if len(insights) > 3:
         message2 = "🔍 **Additional Recommendations:**"
         
-        for i, insight in enumerate(remaining_insights[:3]):
-            message2 += f"\n\n• **{insight.split(':')[0] if ':' in insight else f'Tip {i+3}'}:** {insight.split(':', 1)[1].strip() if ':' in insight else insight}"
+        for i, insight in enumerate(insights[3:6], start=4):
+            message2 += f"\n\n{i}. {insight}"
         
         if send_whatsapp_message(sender, message2).get('success'):
-            messages_sent += 1
-    
-    # Message 3: Any remaining insights (if more than 5 total)
-    if len(insights) > 5:
-        final_insights = insights[5:]
-        message3 = "🔍 **Final Recommendations:**"
-        
-        for i, insight in enumerate(final_insights[:3]):
-            message3 += f"\n\n• **{insight.split(':')[0] if ':' in insight else f'Additional Tip {i+1}'}:** {insight.split(':', 1)[1].strip() if ':' in insight else insight}"
-        
-        if send_whatsapp_message(sender, message3).get('success'):
             messages_sent += 1
     
     # Final message: Next steps
@@ -414,34 +414,31 @@ Type 'start' to review another CV or upgrade to Advanced Review for comprehensiv
         messages_sent += 1
     
     logger.info(f"✅ Basic review results sent to {sender} in {messages_sent} messages")
-    
-    return {'success': messages_sent > 0}
 
 
 def send_advanced_review_results(sender, result):
-    """Send advanced review results via WhatsApp - FIXED with character limit handling"""
+    """Send advanced review results via WhatsApp"""
     score = result.get('improvement_score', 0)
     download_link = result.get('download_link', '')
     insights = result.get('insights', [])
     
     # Message 1: Score and top insights
-    top_insights = insights[:2] if insights else []
-    top_insights_text = "\n".join([f"• {insight[:100]}..." if len(insight) > 100 else f"• {insight}" for insight in top_insights])
+    top_insights = "\n• ".join(insights[:3]) if insights else "See your PDF report for detailed insights"
     
     message1 = f"""🎉 **Advanced CV Review Complete!**
 
 📊 **Your CV Score: {score}/100**
 
 🔍 **Top Findings:**
-{top_insights_text}
+• {top_insights}
 
 📄 **Download Your Full Report:**
 {download_link}"""
     
     # Send first message
-    send_result1 = send_whatsapp_message(sender, message1)
+    send_whatsapp_message(sender, message1)
     
-    # Message 2: Report details and next steps
+    # Message 2: Report details
     message2 = f"""📋 **Your Report Includes:**
 ✅ Section-by-section analysis
 ✅ ATS optimization tips
@@ -449,16 +446,11 @@ def send_advanced_review_results(sender, result):
 ✅ Formatting recommendations
 ✅ Keyword optimization
 
-💡 Report link active for 24 hours. {
-'Also sent to your email!' if result.get('email_sent') else 'Save for reference!'
-}
+💡 Report link active for 24 hours. {'Also sent to your email!' if result.get('email_sent') else 'Save for reference!'}
 
 Type 'start' to review another CV!"""
     
     # Send second message
-    send_result2 = send_whatsapp_message(sender, message2)
+    send_whatsapp_message(sender, message2)
     
-    logger.info(f"✅ Advanced review results sent to {sender} in 2 messages")
-    
-    # Return success if at least one message was sent
-    return send_result1 if send_result1.get('success') else send_result2
+    logger.info(f"✅ Advanced review results sent to {sender}")

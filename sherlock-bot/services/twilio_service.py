@@ -1,4 +1,4 @@
-# services/twilio_service.py
+# services/twilio_service.py - Production WhatsApp Business
 import os
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
@@ -20,6 +20,7 @@ def get_twilio_client():
     if twilio_client is None:
         twilio_client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
         twilio_validator = RequestValidator(Config.TWILIO_AUTH_TOKEN)
+        logger.info(f"Initialized Twilio client with WhatsApp Business: {Config.TWILIO_PHONE_NUMBER}")
     
     return twilio_client
 
@@ -34,19 +35,30 @@ def send_whatsapp_message(to, body):
         if not sender.startswith('whatsapp:'):
             sender = f"whatsapp:{sender}"
 
+        # Split long messages if needed (WhatsApp has a 1600 char limit)
+        if len(body) > 1500:
+            logger.warning(f"Message length ({len(body)}) exceeds recommended limit, sending anyway")
+
         message = client.messages.create(
             from_=sender,
             body=body,
             to=recipient
         )
 
-        logger.info(f"Sent WhatsApp message to {to} with SID: {message.sid}")
+        logger.info(f"✅ Sent WhatsApp message to {to} with SID: {message.sid}")
         return {
             'success': True,
             'sid': message.sid,
             'status': message.status
         }
 
+    except TwilioRestException as e:
+        logger.error(f"Twilio error sending WhatsApp message to {to}: {e.msg}")
+        return {
+            'success': False,
+            'error': e.msg,
+            'code': e.code
+        }
     except Exception as e:
         logger.error(f"Error sending WhatsApp message to {to}: {str(e)}")
         return {
@@ -72,7 +84,7 @@ def send_whatsapp_message_with_media(to, body, media_url):
             to=recipient
         )
 
-        logger.info(f"Sent WhatsApp message with media to {to} with SID: {message.sid}")
+        logger.info(f"✅ Sent WhatsApp message with media to {to} with SID: {message.sid}")
         return {
             'success': True,
             'sid': message.sid,
@@ -87,20 +99,18 @@ def send_whatsapp_message_with_media(to, body, media_url):
         }
 
 def get_firebase_webhook_url():
-    """
-    Get the correct webhook URL for Firebase Functions
-    Option A: africa-south1 region with Gen 2 Functions
-    """
-    # Hardcoded URL for africa-south1 - this is the most reliable approach
+    """Get the correct webhook URL for Firebase Functions"""
+    # Production webhook URL for africa-south1
     webhook_url = 'https://africa-south1-cvreview-d1d4b.cloudfunctions.net/app_function/webhook/twilio'
     
-    logger.info(f"Using africa-south1 webhook URL: {webhook_url}")
+    logger.info(f"Using production webhook URL: {webhook_url}")
     return webhook_url
 
 def validate_twilio_request(request):
-    """Validate that a webhook request is from Twilio - Option A"""
-    if os.getenv('FLASK_ENV') == 'development' and os.getenv('SKIP_TWILIO_VALIDATION'):
-        logger.warning("TWILIO VALIDATION SKIPPED - DEVELOPMENT MODE")
+    """Validate that a webhook request is from Twilio - Production"""
+    # Skip validation in development if explicitly set
+    if Config.SKIP_TWILIO_VALIDATION and not Config.IS_PRODUCTION:
+        logger.warning("⚠️ TWILIO VALIDATION SKIPPED - DEVELOPMENT MODE")
         return True
 
     try:
@@ -115,74 +125,23 @@ def validate_twilio_request(request):
 
         webhook_url = get_firebase_webhook_url()
         
-        logger.info(f"Validating Twilio request for africa-south1:")
-        logger.info(f"Configured webhook URL: {webhook_url}")
-        logger.info(f"Actual request URL: {request.url}")
+        # In production, validate with the exact webhook URL
+        is_valid = twilio_validator.validate(webhook_url, request.form, signature)
         
-        # Try multiple URL variations for africa-south1
-        urls_to_try = [
-            webhook_url,  # The configured URL
-            request.url,  # The actual request URL
-            request.url.replace('http://', 'https://'),  # Force HTTPS
-            'https://africa-south1-cvreview-d1d4b.cloudfunctions.net/app_function/webhook/twilio',  # Backup
-        ]
+        if is_valid:
+            logger.info(f"✅ Valid Twilio request signature")
+        else:
+            logger.warning(f"❌ Invalid Twilio request signature")
+            
+            # Log additional debug info in non-production
+            if not Config.IS_PRODUCTION:
+                logger.info(f"Expected URL: {webhook_url}")
+                logger.info(f"Request URL: {request.url}")
+                logger.info(f"Signature: {signature[:20]}...")
         
-        for i, url in enumerate(urls_to_try, 1):
-            try:
-                is_valid = twilio_validator.validate(url, request.form, signature)
-                if is_valid:
-                    logger.info(f"✅ Validation succeeded with URL {i}: {url}")
-                    return True
-                else:
-                    logger.info(f"❌ Validation failed with URL {i}: {url}")
-            except Exception as e:
-                logger.error(f"URL {i} validation error: {str(e)}")
-        
-        logger.error("❌ All validation attempts failed for africa-south1")
-        return False
+        return is_valid
 
     except Exception as e:
         logger.error(f"Error validating Twilio request: {str(e)}")
-        return False
-
-def validate_twilio_request_debug(request):
-    """Debug version with detailed logging for africa-south1"""
-    try:
-        # Get validator
-        if twilio_validator is None:
-            get_twilio_client()  # This will initialize the validator
-            
-        signature = request.headers.get('X-Twilio-Signature', '')
-        
-        logger.info("=== TWILIO VALIDATION DEBUG (africa-south1) ===")
-        logger.info(f"Request URL: {request.url}")
-        logger.info(f"Request method: {request.method}")
-        logger.info(f"Request headers: {dict(request.headers)}")
-        logger.info(f"Request form data: {dict(request.form)}")
-        logger.info(f"X-Twilio-Signature: {signature}")
-        logger.info(f"Target region: africa-south1")
-        
-        # URLs specific to africa-south1
-        urls_to_try = [
-            'https://africa-south1-cvreview-d1d4b.cloudfunctions.net/app_function/webhook/twilio',
-            request.url,
-            request.url.replace('http://', 'https://'),
-        ]
-        
-        for i, url in enumerate(urls_to_try, 1):
-            logger.info(f"Trying africa-south1 URL {i}: {url}")
-            try:
-                is_valid = twilio_validator.validate(url, request.form, signature)
-                logger.info(f"URL {i} validation result: {is_valid}")
-                if is_valid:
-                    logger.info(f"🎉 SUCCESS: Validation passed with africa-south1 URL: {url}")
-                    return True
-            except Exception as e:
-                logger.error(f"URL {i} validation error: {str(e)}")
-        
-        logger.error("❌ All africa-south1 URL validation attempts failed")
-        return False
-        
-    except Exception as e:
-        logger.error(f"Debug validation error: {str(e)}")
-        return False
+        # In production, fail closed (reject if validation fails)
+        return not Config.IS_PRODUCTION

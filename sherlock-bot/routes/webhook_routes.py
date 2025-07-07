@@ -1,9 +1,11 @@
-# routes/webhook_routes.py - Production webhook routes
+# routes/webhook_routes.py - Production WhatsApp Business Routes
 from flask import Blueprint, request, jsonify
 from services.twilio_service import validate_twilio_request
 from controllers.webhook_controller import handle_whatsapp_message
 from controllers.payment_controller import process_payment_webhook
 from utils.logger import get_logger
+from utils.file_utils import cleanup_temp_files
+from config import Config
 import traceback
 
 # Initialize logger
@@ -17,17 +19,26 @@ def twilio_webhook():
     """Handle incoming WhatsApp messages via Twilio"""
     
     try:
-        logger.info(f"📨 Received webhook request from {request.remote_addr}")
+        logger.info(f"📨 Received WhatsApp webhook from {request.remote_addr}")
         
-        # Validate Twilio request (optional in development)
-        if not validate_twilio_request(request):
-            logger.warning("⚠️ Invalid Twilio signature")
-            # In production, you should return 403
-            # return jsonify({'error': 'Invalid signature'}), 403
-            # For now, just log the warning and continue
+        # Validate Twilio request in production
+        if Config.IS_PRODUCTION:
+            if not validate_twilio_request(request):
+                logger.warning("⚠️ Invalid Twilio signature - rejecting request")
+                return jsonify({'error': 'Invalid signature'}), 403
+        else:
+            # In development, log validation status but continue
+            is_valid = validate_twilio_request(request)
+            logger.info(f"Development mode - Signature valid: {is_valid}")
         
         # Process the WhatsApp message
         result = handle_whatsapp_message(request)
+        
+        # Clean up old temp files periodically
+        try:
+            cleanup_temp_files()
+        except Exception as e:
+            logger.warning(f"Failed to clean temp files: {e}")
         
         logger.info("✅ Message processed successfully")
         return result
@@ -48,11 +59,17 @@ def twilio_status_webhook():
         # Log status update
         message_sid = request.form.get('MessageSid')
         message_status = request.form.get('MessageStatus')
+        to = request.form.get('To')
+        error_code = request.form.get('ErrorCode')
         
         logger.info(f"📊 Status update for {message_sid}: {message_status}")
         
+        # Log errors if any
+        if error_code:
+            logger.error(f"❌ Message error {error_code} for {to}")
+        
         # You can add logic here to track message delivery status
-        # For now, just acknowledge receipt
+        # For example, update session status, retry failed messages, etc.
         
         return '', 200
         
@@ -90,9 +107,27 @@ def webhook_health():
     return jsonify({
         'status': 'healthy',
         'service': 'webhook-handler',
+        'environment': 'production' if Config.IS_PRODUCTION else 'development',
+        'whatsapp_number': Config.TWILIO_PHONE_NUMBER,
+        'business_name': Config.BUSINESS_NAME,
         'endpoints': [
             '/webhook/twilio',
             '/webhook/twilio/status',
-            '/webhook/paystack'
+            '/webhook/paystack',
+            '/webhook/health'
         ]
+    })
+
+
+@webhook_bp.route('/test', methods=['GET', 'POST'])
+def webhook_test():
+    """Test endpoint for webhook configuration"""
+    if Config.IS_PRODUCTION:
+        return jsonify({'error': 'Test endpoint disabled in production'}), 404
+    
+    return jsonify({
+        'status': 'ok',
+        'method': request.method,
+        'headers': dict(request.headers),
+        'webhook_url': 'https://africa-south1-cvreview-d1d4b.cloudfunctions.net/app_function/webhook/twilio'
     })

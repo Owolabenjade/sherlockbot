@@ -1,39 +1,26 @@
-# config.py - Debug version
+# config.py - Production WhatsApp Business Configuration
 import os
 from dotenv import load_dotenv
 
 # Only load .env in local development
 if not os.getenv('K_SERVICE') and not os.getenv('FUNCTION_TARGET'):
-    print("Loading .env file (local development)")
     load_dotenv()
-else:
-    print("Running in Cloud Functions - not loading .env file")
-
-# Debug logging
-print("=" * 50)
-print("CONFIG.PY DEBUG")
-print("=" * 50)
-print(f"K_SERVICE: {os.getenv('K_SERVICE')}")
-print(f"FUNCTION_TARGET: {os.getenv('FUNCTION_TARGET')}")
-print(f"TWILIO_ACCOUNT_SID in env: {bool(os.getenv('TWILIO_ACCOUNT_SID'))}")
-print(f"TWILIO_AUTH_TOKEN in env: {bool(os.getenv('TWILIO_AUTH_TOKEN'))}")
-print(f"TWILIO_PHONE_NUMBER in env: {os.getenv('TWILIO_PHONE_NUMBER')}")
-print("=" * 50)
 
 class Config:
     # Flask configuration
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
     DEBUG = os.getenv('FLASK_ENV') != 'production'
     
-    # Twilio configuration - with debug logging
+    # Twilio Production Configuration
     TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
     TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
-    TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
+    TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', 'whatsapp:+18383682677')  # Your production WhatsApp number
     
-    # Log what we got
-    print(f"Config.TWILIO_ACCOUNT_SID: {TWILIO_ACCOUNT_SID[:10] + '...' if TWILIO_ACCOUNT_SID else 'NOT SET'}")
-    print(f"Config.TWILIO_AUTH_TOKEN: {'SET' if TWILIO_AUTH_TOKEN else 'NOT SET'}")
-    print(f"Config.TWILIO_PHONE_NUMBER: {TWILIO_PHONE_NUMBER}")
+    # WhatsApp Business Profile
+    BUSINESS_NAME = "Sherlock CV Review"
+    BUSINESS_DESCRIPTION = "AI-powered CV review and optimization service"
+    BUSINESS_CATEGORY = "Professional Services"
+    BUSINESS_WEBSITE = "https://cvreview-d1d4b.web.app"  # Your Firebase hosting URL
     
     # Firebase configuration
     STORAGE_BUCKET = os.getenv('STORAGE_BUCKET', 'cvreview-d1d4b.firebasestorage.app')
@@ -45,7 +32,7 @@ class Config:
     # SendGrid configuration
     SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
     EMAIL_FROM = os.getenv('EMAIL_FROM', 'reviews@sherlockbot.com')
-    EMAIL_FROM_NAME = os.getenv('EMAIL_FROM_NAME', 'Sherlock Bot CV Review')
+    EMAIL_FROM_NAME = os.getenv('EMAIL_FROM_NAME', 'Sherlock CV Review')
     
     # CV Analysis API
     CV_ANALYSIS_API_URL = os.getenv('CV_ANALYSIS_API_URL', 'https://cv-review-1.onrender.com/api/upload-and-analyze')
@@ -56,10 +43,18 @@ class Config:
     PAYMENT_SUCCESS_URL = os.getenv('PAYMENT_SUCCESS_URL', '/payment/success')
     PAYMENT_CANCEL_URL = os.getenv('PAYMENT_CANCEL_URL', '/payment/cancel')
     
-    # File handling
-    UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max upload size
+    # File handling - Enhanced for Production WhatsApp
+    UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', '/tmp/uploads' if os.path.exists('/tmp') else 'uploads')
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max for WhatsApp Business
     ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc'}
+    
+    # WhatsApp Media limits
+    WHATSAPP_MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB for documents
+    WHATSAPP_SUPPORTED_FORMATS = {
+        'application/pdf': 'pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/msword': 'doc'
+    }
     
     # Admin configuration
     ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
@@ -70,3 +65,7 @@ class Config:
     
     # Logger configuration
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    
+    # Production flags
+    IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
+    SKIP_TWILIO_VALIDATION = os.getenv('SKIP_TWILIO_VALIDATION', 'false').lower() == 'true'
